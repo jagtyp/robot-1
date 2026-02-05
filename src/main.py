@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""Robot Head - Main entry point and orchestrator."""
+
+import argparse
+import logging
+import signal
+import sys
+import threading
+import time
+
+from src.config import load_config
+from src.hardware.gpio_map import GPIOMap
+from src.display.gc9a01 import GC9A01
+from src.display.display_manager import DisplayManager
+from src.eyes.eye_renderer import EyeRenderer
+from src.eyes.animator import EyeAnimator
+from src.tracking.camera import Camera
+from src.tracking.face_detector import FaceDetector
+from src.tracking.tracker import FaceTracker
+
+log = logging.getLogger("robot-head")
+
+
+class RobotHead:
+    def __init__(self, config_path: str = "config.yaml", debug: bool = False):
+        self.config = load_config(config_path)
+        self._debug = debug
+        self._running = False
+        self._face_position = None
+        self._lock = threading.Lock()
+
+        # Debug state (only used if --debug)
+        self._debug_state = None
+        self._detect_fps = 0.0
+        self._render_fps = 0.0
+
+    def start(self):
+        self._running = True
+
+        # Set up logging
+        logging.basicConfig(
+            level=getattr(logging, self.config.log_level),
+            format="%(asctime)s %(name)s %(levelname)s %(message)s",
+        )
+
+        # Initialize displays
+        pins = GPIOMap()
+        log.info("Initializing left display (CE0)...")
+        left_disp = GC9A01(0, 0, pins.LEFT_DC, pins.LEFT_RST, pins.LEFT_BL,
+                           self.config.display.spi_speed_hz)
+        left_disp.init_display()
+
+        log.info("Initializing right display (CE1)...")
+        right_disp = GC9A01(0, 1, pins.RIGHT_DC, pins.RIGHT_RST, pins.RIGHT_BL,
+                            self.config.display.spi_speed_hz)
+        right_disp.init_display()
+
+        display_mgr = DisplayManager(left_disp, right_disp)
+        log.info("Displays initialized")
+
+        # Eye renderers and animator
+        renderer_left = EyeRenderer(self.config.eyes)
+        renderer_right = EyeRenderer(self.config.eyes)
+        animator = EyeAnimator(self.config.animation)
+
+        # Start debug server if requested
+        if self._debug:
+            from src.debug.web_server import DebugState, start_debug_server
+            self._debug_state = DebugState()
+            start_debug_server(self._debug_state, self.config.debug.web_port)
+            log.info(f"Debug server at http://0.0.0.0:{self.config.debug.web_port}")
+
+        # Start tracking thread
+        tracking_thread = threading.Thread(target=self._tracking_loop, daemon=True)
+        tracking_thread.start()
+        log.info("Tracking thread started")
+
+        # Main render loop
+        target_fps = self.config.display.fps_target
+        frame_time = 1.0 / target_fps
+        last_time = time.monotonic()
+        frame_count = 0
+        fps_timer = time.monotonic()
+
+        log.info(f"Entering render loop at {target_fps} FPS target")
+
+        try:
+            while self._running:
+                now = time.monotonic()
+                dt = now - last_time
+                last_time = now
+
+                # Read face position
+                with self._lock:
+                    face_pos = self._face_position
+
+                # Animate
+                left_state, right_state = animator.update(dt, face_pos)
+
+                # Render both eyes
+                left_img = renderer_left.render(left_state)
+                right_img = renderer_right.render(right_state)
+
+                # Push to displays
+                display_mgr.update(left_img, right_img)
+
+                # FPS counting
+                frame_count += 1
+                if now - fps_timer >= 1.0:
+                    self._render_fps = frame_count / (now - fps_timer)
+                    frame_count = 0
+                    fps_timer = now
+                    if self._debug and self._debug_state:
+                        self._debug_state.update_stats(
+                            gaze=(left_state.pupil_x, left_state.pupil_y),
+                            fps_render=self._render_fps,
+                            fps_detect=self._detect_fps,
+                            face_detected=face_pos is not None,
+                        )
+
+                # Frame rate limiting
+                elapsed = time.monotonic() - now
+                sleep_time = frame_time - elapsed
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+
+        except KeyboardInterrupt:
+            log.info("Interrupted")
+        finally:
+            self._running = False
+            log.info("Shutting down displays...")
+            display_mgr.cleanup()
+            import RPi.GPIO as GPIO
+            GPIO.cleanup()
+            log.info("Done")
+
+    def _tracking_loop(self):
+        """Background thread: camera capture + face detection."""
+        camera = Camera(
+            width=self.config.tracking.lores_width,
+            height=self.config.tracking.lores_height,
+        )
+        detector = FaceDetector(
+            scale_factor=self.config.tracking.detection_scale_factor,
+            min_neighbors=self.config.tracking.detection_min_neighbors,
+            min_face_size=self.config.tracking.min_face_size,
+        )
+        tracker = FaceTracker(
+            smoothing=self.config.tracking.smoothing,
+            lost_timeout=self.config.tracking.lost_timeout,
+        )
+
+        camera.start()
+        log.info("Camera started")
+
+        frame_count = 0
+        fps_timer = time.monotonic()
+
+        try:
+            while self._running:
+                grey = camera.capture_grey()
+                faces = detector.detect(grey)
+                position = tracker.update(
+                    faces,
+                    self.config.tracking.lores_width,
+                    self.config.tracking.lores_height,
+                    time.monotonic(),
+                )
+
+                with self._lock:
+                    self._face_position = position
+
+                # Update debug state
+                if self._debug and self._debug_state:
+                    self._debug_state.update_frame(grey, faces)
+
+                # FPS counting
+                frame_count += 1
+                now = time.monotonic()
+                if now - fps_timer >= 1.0:
+                    self._detect_fps = frame_count / (now - fps_timer)
+                    frame_count = 0
+                    fps_timer = now
+
+        except Exception as e:
+            log.error(f"Tracking thread error: {e}", exc_info=True)
+        finally:
+            camera.stop()
+            log.info("Camera stopped")
+
+    def stop(self):
+        self._running = False
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Robot Head")
+    parser.add_argument("--config", default="config.yaml", help="Config file path")
+    parser.add_argument("--debug", action="store_true", help="Enable debug web server")
+    args = parser.parse_args()
+
+    head = RobotHead(config_path=args.config, debug=args.debug)
+
+    # Handle SIGTERM gracefully (for systemd)
+    signal.signal(signal.SIGTERM, lambda *_: head.stop())
+
+    head.start()
+
+
+if __name__ == "__main__":
+    main()

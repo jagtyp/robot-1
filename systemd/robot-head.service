@@ -1,0 +1,27 @@
+[Unit]
+Description=Robot Head - Animated Eyes with Face Tracking
+After=multi-user.target
+
+[Service]
+Type=simple
+User=robot
+Group=robot
+WorkingDirectory=/opt/robot-head
+ExecStart=/opt/robot-head/venv/bin/python3 -u -m src.main --debug
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Hardware access groups
+SupplementaryGroups=spi i2c video gpio
+
+# Resource limits for Pi Zero 2 (512MB total)
+MemoryMax=300M
+
+# Clean shutdown
+KillMode=mixed
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

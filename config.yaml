@@ -1,0 +1,37 @@
+# Robot Head Configuration
+
+display:
+  spi_speed_hz: 62500000    # 62.5 MHz SPI clock
+  fps_target: 30            # Target frame rate for eye rendering
+
+eyes:
+  iris_color: [200, 30, 20]   # RGB - glowing red/robotic
+  sclera_radius: 110
+  iris_radius: 65
+  pupil_radius: 30
+  pupil_max_offset: 45
+
+animation:
+  blink_interval_min: 2.0
+  blink_interval_max: 6.0
+  blink_duration: 0.2
+  pursuit_smoothing: 0.15
+  idle_interval_min: 1.5
+  idle_interval_max: 4.0
+  idle_range_x: 0.6
+  idle_range_y: 0.3
+
+tracking:
+  lores_width: 160
+  lores_height: 120
+  detection_scale_factor: 1.2
+  detection_min_neighbors: 3
+  min_face_size: [20, 20]
+  smoothing: 0.3
+  lost_timeout: 0.5
+
+debug:
+  web_port: 8080
+
+logging:
+  level: INFO
