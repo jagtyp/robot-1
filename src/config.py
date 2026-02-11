@@ -16,6 +16,7 @@ class EyeConfig:
     iris_radius: int = 65
     pupil_radius: int = 30
     pupil_max_offset: int = 45
+    assets_dir: str = "assets/eyes"
 
 
 @dataclass
@@ -34,11 +35,11 @@ class AnimationConfig:
 class TrackingConfig:
     lores_width: int = 160
     lores_height: int = 120
-    detection_scale_factor: float = 1.2
-    detection_min_neighbors: int = 3
-    min_face_size: tuple = (20, 20)
+    motion_history: int = 30
+    motion_threshold: int = 25
+    motion_min_area: int = 150
     smoothing: float = 0.3
-    lost_timeout: float = 0.5
+    lost_timeout: float = 3.0
 
 
 @dataclass
@@ -102,9 +103,9 @@ def load_config(path: str = "config.yaml") -> Config:
         config.tracking = TrackingConfig(
             lores_width=t.get("lores_width", config.tracking.lores_width),
             lores_height=t.get("lores_height", config.tracking.lores_height),
-            detection_scale_factor=t.get("detection_scale_factor", config.tracking.detection_scale_factor),
-            detection_min_neighbors=t.get("detection_min_neighbors", config.tracking.detection_min_neighbors),
-            min_face_size=tuple(t.get("min_face_size", list(config.tracking.min_face_size))),
+            motion_history=t.get("motion_history", config.tracking.motion_history),
+            motion_threshold=t.get("motion_threshold", config.tracking.motion_threshold),
+            motion_min_area=t.get("motion_min_area", config.tracking.motion_min_area),
             smoothing=t.get("smoothing", config.tracking.smoothing),
             lost_timeout=t.get("lost_timeout", config.tracking.lost_timeout),
         )

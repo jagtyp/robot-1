@@ -2,11 +2,12 @@ import math
 from PIL import Image, ImageDraw
 
 from src.eyes.eye_state import EyeState
+from src.eyes.eyelid_mixin import EyelidMixin
 from src.config import EyeConfig
 
 
-class EyeRenderer:
-    """Renders a single eye to a 240x240 PIL Image."""
+class ProceduralEyeRenderer(EyelidMixin):
+    """Renders a single eye procedurally to a 240x240 PIL Image."""
 
     SIZE = 240
     CENTER = 120
@@ -55,10 +56,11 @@ class EyeRenderer:
         self._circle(hx + 14, hy + 18, 3, (200, 200, 200))
 
         # 8. Upper eyelid
-        self._draw_eyelid_upper(state.upper_eyelid, state.brow_angle, state.squint)
+        self._draw_eyelid_upper(self._draw, state.upper_eyelid,
+                                state.brow_angle, state.squint)
 
         # 9. Lower eyelid
-        self._draw_eyelid_lower(state.lower_eyelid, state.squint)
+        self._draw_eyelid_lower(self._draw, state.lower_eyelid, state.squint)
 
         return self._img
 
@@ -68,65 +70,6 @@ class EyeRenderer:
             fill=fill,
         )
 
-    def _draw_eyelid_upper(self, closure: float, brow_angle: float, squint: float):
-        """Draw the upper eyelid as a polygon covering from the top."""
-        total_closure = min(1.0, closure + squint * 0.3)
-        if total_closure <= 0.01:
-            return
 
-        cx = self.CENTER
-        r = self._sclera_r + 5
-
-        # Total descent of the eyelid edge
-        drop = total_closure * self._sclera_r * 2.2
-
-        # Build polygon: top rectangle + curved bottom edge
-        points = []
-        points.append((cx - r - 10, cx - r - 10))
-        points.append((cx + r + 10, cx - r - 10))
-
-        # Curved bottom edge (right to left)
-        steps = 24
-        for i in range(steps + 1):
-            t = i / steps
-            x = cx + r - t * 2 * r
-
-            curve = math.sin(t * math.pi)
-            # Floor ramps up with closure so the eyelid covers the full
-            # circular sclera at the edges when fully closed.
-            floor = (total_closure ** 0.6) * 0.88
-            curve = max(curve, floor)
-
-            tilt = brow_angle * (t - 0.5) * 40
-            y = (cx - r) + drop * curve + tilt
-            points.append((x, y))
-
-        self._draw.polygon(points, fill=(0, 0, 0))
-
-    def _draw_eyelid_lower(self, closure: float, squint: float):
-        """Draw the lower eyelid from the bottom."""
-        total_closure = min(1.0, closure + squint * 0.15)
-        if total_closure <= 0.01:
-            return
-
-        cx = self.CENTER
-        r = self._sclera_r + 5
-
-        rise = total_closure * self._sclera_r * 1.8
-
-        points = []
-        points.append((cx - r - 10, cx + r + 10))
-        points.append((cx + r + 10, cx + r + 10))
-
-        # Curved top edge (right to left)
-        steps = 24
-        for i in range(steps + 1):
-            t = i / steps
-            x = cx + r - t * 2 * r
-            curve = math.sin(t * math.pi)
-            floor = (total_closure ** 0.6) * 0.88
-            curve = max(curve, floor)
-            y = (cx + r) - rise * curve
-            points.append((x, y))
-
-        self._draw.polygon(points, fill=(0, 0, 0))
+# Backward-compatible alias
+EyeRenderer = ProceduralEyeRenderer

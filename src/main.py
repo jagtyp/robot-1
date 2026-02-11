@@ -12,10 +12,10 @@ from src.config import load_config
 from src.hardware.gpio_map import GPIOMap
 from src.display.gc9a01 import GC9A01
 from src.display.display_manager import DisplayManager
-from src.eyes.eye_renderer import EyeRenderer
+from src.eyes.style_manager import StyleManager
 from src.eyes.animator import EyeAnimator
 from src.tracking.camera import Camera
-from src.tracking.face_detector import FaceDetector
+from src.tracking.motion_detector import MotionDetector
 from src.tracking.tracker import FaceTracker
 
 log = logging.getLogger("robot-head")
@@ -58,15 +58,15 @@ class RobotHead:
         display_mgr = DisplayManager(left_disp, right_disp)
         log.info("Displays initialized")
 
-        # Eye renderers and animator
-        renderer_left = EyeRenderer(self.config.eyes)
-        renderer_right = EyeRenderer(self.config.eyes)
+        # Eye style manager and animator
+        style_mgr = StyleManager(self.config.eyes)
         animator = EyeAnimator(self.config.animation)
 
         # Start debug server if requested
         if self._debug:
             from src.debug.web_server import DebugState, start_debug_server
             self._debug_state = DebugState()
+            self._debug_state.style_manager = style_mgr
             start_debug_server(self._debug_state, self.config.debug.web_port)
             log.info(f"Debug server at http://0.0.0.0:{self.config.debug.web_port}")
 
@@ -97,7 +97,8 @@ class RobotHead:
                 # Animate
                 left_state, right_state = animator.update(dt, face_pos)
 
-                # Render both eyes
+                # Render both eyes (get current renderers from style manager)
+                renderer_left, renderer_right = style_mgr.get_renderers()
                 left_img = renderer_left.render(left_state)
                 right_img = renderer_right.render(right_state)
 
@@ -140,10 +141,10 @@ class RobotHead:
             width=self.config.tracking.lores_width,
             height=self.config.tracking.lores_height,
         )
-        detector = FaceDetector(
-            scale_factor=self.config.tracking.detection_scale_factor,
-            min_neighbors=self.config.tracking.detection_min_neighbors,
-            min_face_size=self.config.tracking.min_face_size,
+        detector = MotionDetector(
+            history=self.config.tracking.motion_history,
+            threshold=self.config.tracking.motion_threshold,
+            min_area=self.config.tracking.motion_min_area,
         )
         tracker = FaceTracker(
             smoothing=self.config.tracking.smoothing,

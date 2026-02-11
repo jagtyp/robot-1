@@ -5,7 +5,7 @@ import numpy as np
 class FaceDetector:
     """OpenCV Haar Cascade face detection."""
 
-    CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    CASCADE_PATH = "/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml"
 
     def __init__(self, scale_factor: float = 1.2, min_neighbors: int = 3,
                  min_face_size: tuple = (20, 20)):
