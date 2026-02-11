@@ -9,6 +9,7 @@ import threading
 import time
 
 from src.config import load_config
+from src.state import load_state, apply_state
 from src.hardware.gpio_map import GPIOMap
 from src.display.gc9a01 import GC9A01
 from src.display.display_manager import DisplayManager
@@ -70,6 +71,10 @@ class RobotHead:
             self._debug_state.style_manager = style_mgr
             start_debug_server(self._debug_state, self.config.debug.web_port)
             log.info(f"Debug server at http://0.0.0.0:{self.config.debug.web_port}")
+
+        # Restore persisted UI state (style, mood, glow, fps overlay)
+        saved = load_state()
+        apply_state(saved, style_mgr, self._debug_state)
 
         # Start tracking thread
         tracking_thread = threading.Thread(target=self._tracking_loop, daemon=True)

@@ -9,6 +9,8 @@ from socketserver import ThreadingMixIn
 import cv2
 import numpy as np
 
+from src.state import save_state
+
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
@@ -368,6 +370,7 @@ class DebugHandler(BaseHTTPRequestHandler):
             return
 
         if sm.set_active_style(style_id):
+            save_state(sm, self.debug_state)
             self._send_json({"ok": True})
         else:
             self._send_json({"ok": False, "error": f"unknown style: {style_id}"}, 400)
@@ -396,6 +399,7 @@ class DebugHandler(BaseHTTPRequestHandler):
             return
 
         if sm.set_cartoon_mood(mood_id):
+            save_state(sm, self.debug_state)
             self._send_json({"ok": True})
         else:
             self._send_json({"ok": False, "error": f"unknown mood: {mood_id}"}, 400)
@@ -423,6 +427,7 @@ class DebugHandler(BaseHTTPRequestHandler):
             return
 
         if sm.set_cartoon_glow(enabled):
+            save_state(sm, self.debug_state)
             self._send_json({"ok": True})
         else:
             self._send_json({"ok": False, "error": "not in cartoon mode"}, 400)
@@ -439,6 +444,7 @@ class DebugHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": False, "error": "invalid JSON"}, 400)
             return
         self.debug_state.show_fps = enabled
+        save_state(self.debug_state.style_manager, self.debug_state)
         self._send_json({"ok": True})
 
     def log_message(self, format, *args):
