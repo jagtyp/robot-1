@@ -8,9 +8,22 @@ from src.config import EyeConfig
 from src.eyes.eye_renderer import EyeRenderer
 from src.eyes.sprite_renderer import SpriteEyeRenderer
 from src.eyes.cartoon_renderer import CartoonEyeRenderer
-from src.eyes.cartoon_moods import CARTOON_MOODS
+from src.eyes.cyborg_renderer import CyborgEyeRenderer
+from src.eyes.neon_renderer import NeonEyeRenderer
+from src.eyes.cat_renderer import CatEyeRenderer
 
 log = logging.getLogger("robot-head")
+
+
+def _has_moods(renderer) -> bool:
+    """Check if a renderer supports the mood interface."""
+    return hasattr(renderer, 'mood_id') and hasattr(renderer, 'set_mood') \
+        and hasattr(renderer, 'get_moods')
+
+
+def _has_glow(renderer) -> bool:
+    """Check if a renderer supports glow toggle."""
+    return hasattr(renderer, 'glow_enabled')
 
 
 class StyleManager:
@@ -36,6 +49,23 @@ class StyleManager:
             "id": "cartoon",
             "name": "Cartoon Eyes",
             "type": "cartoon",
+        }
+
+        # Register additional procedural styles
+        self._styles["cyborg"] = {
+            "id": "cyborg",
+            "name": "Cyborg Reticle",
+            "type": "cyborg",
+        }
+        self._styles["neon"] = {
+            "id": "neon",
+            "name": "Neon Ring",
+            "type": "neon",
+        }
+        self._styles["cat"] = {
+            "id": "cat",
+            "name": "Cat Eye",
+            "type": "cat",
         }
 
         # Discover sprite styles from assets directory
@@ -71,6 +101,15 @@ class StyleManager:
         elif style["type"] == "cartoon":
             self._left = CartoonEyeRenderer(self._config, is_left=True)
             self._right = CartoonEyeRenderer(self._config, is_left=False)
+        elif style["type"] == "cyborg":
+            self._left = CyborgEyeRenderer(self._config, is_left=True)
+            self._right = CyborgEyeRenderer(self._config, is_left=False)
+        elif style["type"] == "neon":
+            self._left = NeonEyeRenderer(self._config, is_left=True)
+            self._right = NeonEyeRenderer(self._config, is_left=False)
+        elif style["type"] == "cat":
+            self._left = CatEyeRenderer(self._config, is_left=True)
+            self._right = CatEyeRenderer(self._config, is_left=False)
 
     def get_styles(self) -> list[dict]:
         """Return list of all available styles with active flag."""
@@ -106,46 +145,57 @@ class StyleManager:
         with self._lock:
             return self._left, self._right
 
-    def get_cartoon_moods(self) -> list[dict] | None:
-        """Return mood list with active flag, or None if not in cartoon mode."""
-        with self._lock:
-            if self._styles.get(self._active_id, {}).get("type") != "cartoon":
-                return None
-            active_mood = self._left.mood_id if self._left else "neutral"
-            result = []
-            for mood in CARTOON_MOODS.values():
-                result.append({
-                    "id": mood.id,
-                    "name": mood.name,
-                    "active": mood.id == active_mood,
-                })
-            return result
+    # --- Generic mood interface ---
 
-    def set_cartoon_mood(self, mood_id: str) -> bool:
-        """Switch cartoon mood on both renderers. Returns True on success."""
+    def get_moods(self) -> list[dict] | None:
+        """Return mood list with active flag, or None if current style has no moods."""
         with self._lock:
-            if self._styles.get(self._active_id, {}).get("type") != "cartoon":
+            if not self._left or not _has_moods(self._left):
+                return None
+            active_mood = self._left.mood_id
+            return [
+                {"id": m["id"], "name": m["name"], "active": m["id"] == active_mood}
+                for m in self._left.get_moods()
+            ]
+
+    def set_mood(self, mood_id: str) -> bool:
+        """Switch mood on both renderers. Returns True on success."""
+        with self._lock:
+            if not self._left or not _has_moods(self._left):
                 return False
-            if mood_id not in CARTOON_MOODS:
+            if not self._left.set_mood(mood_id):
                 return False
-            self._left.set_mood(mood_id)
             self._right.set_mood(mood_id)
-            log.info(f"Switched cartoon mood to: {mood_id}")
+            log.info(f"Switched mood to: {mood_id}")
             return True
 
-    def get_cartoon_glow(self) -> bool | None:
-        """Return glow state, or None if not in cartoon mode."""
+    def get_glow(self) -> bool | None:
+        """Return glow state, or None if current style doesn't support glow."""
         with self._lock:
-            if self._styles.get(self._active_id, {}).get("type") != "cartoon":
+            if not self._left or not _has_glow(self._left):
                 return None
             return self._left.glow_enabled
 
-    def set_cartoon_glow(self, enabled: bool) -> bool:
-        """Toggle glow on both cartoon renderers. Returns True on success."""
+    def set_glow(self, enabled: bool) -> bool:
+        """Toggle glow on both renderers. Returns True on success."""
         with self._lock:
-            if self._styles.get(self._active_id, {}).get("type") != "cartoon":
+            if not self._left or not _has_glow(self._left):
                 return False
             self._left.glow_enabled = enabled
             self._right.glow_enabled = enabled
-            log.info(f"Cartoon glow: {'on' if enabled else 'off'}")
+            log.info(f"Glow: {'on' if enabled else 'off'}")
             return True
+
+    # --- Backward-compatible aliases ---
+
+    def get_cartoon_moods(self):
+        return self.get_moods()
+
+    def set_cartoon_mood(self, mood_id):
+        return self.set_mood(mood_id)
+
+    def get_cartoon_glow(self):
+        return self.get_glow()
+
+    def set_cartoon_glow(self, enabled):
+        return self.set_glow(enabled)

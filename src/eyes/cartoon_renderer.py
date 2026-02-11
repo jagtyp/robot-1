@@ -112,15 +112,20 @@ class CartoonEyeRenderer:
     def mood_id(self):
         return self._target_mood_id
 
-    def set_mood(self, mood_id: str):
-        """Start transitioning to a new mood."""
+    def get_moods(self) -> list[dict]:
+        """Return list of available moods."""
+        return [{"id": m.id, "name": m.name} for m in CARTOON_MOODS.values()]
+
+    def set_mood(self, mood_id: str) -> bool:
+        """Start transitioning to a new mood. Returns True on success."""
         if mood_id not in CARTOON_MOODS:
-            return
+            return False
         if mood_id == self._target_mood_id:
-            return
+            return True
         self._target_mood_id = mood_id
         self._transition_start = time.monotonic()
         self._transitioning = True
+        return True
 
     def _get_eye_shape(self, mood_id: str) -> CartoonEyeShape:
         mood = CARTOON_MOODS[mood_id]

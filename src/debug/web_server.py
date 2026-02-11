@@ -118,7 +118,7 @@ img.stream { border:2px solid #0f0; margin-top:10px; }
 </div>
 
 <div id="moods-section" class="section" style="display:none">
-<h3>Cartoon Mood</h3>
+<h3>Mood</h3>
 <div id="moods-grid" class="styles-grid"></div>
 <div class="toggle-row">
     <input type="checkbox" id="glow-toggle" onchange="toggleGlow(this.checked)">
