@@ -17,6 +17,7 @@ from src.eyes.animator import EyeAnimator
 from src.tracking.camera import Camera
 from src.tracking.motion_detector import MotionDetector
 from src.tracking.tracker import FaceTracker
+from PIL import ImageDraw, ImageFont
 
 log = logging.getLogger("robot-head")
 
@@ -101,6 +102,13 @@ class RobotHead:
                 renderer_left, renderer_right = style_mgr.get_renderers()
                 left_img = renderer_left.render(left_state)
                 right_img = renderer_right.render(right_state)
+
+                # FPS overlay on right eye
+                if self._debug_state and self._debug_state.show_fps:
+                    fps_draw = ImageDraw.Draw(right_img)
+                    fps_text = f"{self._render_fps:.0f}"
+                    fps_draw.text((120, 210), fps_text, fill=(255, 255, 255),
+                                  anchor="mb")
 
                 # Push to displays
                 display_mgr.update(left_img, right_img)
