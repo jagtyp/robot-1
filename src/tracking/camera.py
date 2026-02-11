@@ -9,10 +9,10 @@ class Camera:
         self._width = width
         self._height = height
         self._picam2 = Picamera2()
-        config = self._picam2.create_still_configuration(
+        config = self._picam2.create_video_configuration(
             main={"size": (640, 480)},
             lores={"size": (width, height), "format": "YUV420"},
-            buffer_count=2,
+            buffer_count=4,
         )
         self._picam2.configure(config)
 

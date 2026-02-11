@@ -22,8 +22,8 @@ animation:
   idle_range_y: 0.3
 
 tracking:
-  lores_width: 160
-  lores_height: 120
+  lores_width: 480
+  lores_height: 360
   motion_history: 30
   motion_threshold: 16             # was 25 — more sensitive to movement
   motion_min_area: 80              # was 150 — detect smaller motion
