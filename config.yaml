@@ -15,7 +15,7 @@ animation:
   blink_interval_min: 2.0
   blink_interval_max: 6.0
   blink_duration: 0.2
-  pursuit_smoothing: 0.15
+  pursuit_smoothing: 0.55          # was 0.35 — even snappier eye tracking
   idle_interval_min: 1.5
   idle_interval_max: 4.0
   idle_range_x: 0.6
@@ -24,11 +24,11 @@ animation:
 tracking:
   lores_width: 160
   lores_height: 120
-  detection_scale_factor: 1.2
-  detection_min_neighbors: 3
-  min_face_size: [20, 20]
-  smoothing: 0.3
-  lost_timeout: 0.5
+  motion_history: 30
+  motion_threshold: 16             # was 25 — more sensitive to movement
+  motion_min_area: 80              # was 150 — detect smaller motion
+  smoothing: 0.45                  # was 0.3 — faster lock-on
+  lost_timeout: 1.5                # was 0.5 — keep tracking longer
 
 debug:
   web_port: 8080
