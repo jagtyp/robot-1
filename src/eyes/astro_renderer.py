@@ -1,82 +1,50 @@
-"""Astro Bot-inspired eye renderer — blue LED eyes on dark screen with expressive moods."""
+"""Astro Bot-inspired eye renderer — blue LED dot-matrix eyes with glow on dark screen."""
 
 import math
 import time
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 from src.eyes.eye_state import EyeState
 from src.config import EyeConfig
 
 
-# Astro blue palette
-ASTRO_BLUE = (0, 180, 255)
-ASTRO_BRIGHT = (80, 220, 255)
-ASTRO_DIM = (0, 80, 140)
-HIGHLIGHT = (255, 255, 255)
-SCREEN_BG = (5, 8, 15)
+# Astro blue palette — rich saturated blue like the real thing
+ASTRO_BLUE = (20, 100, 255)
+ASTRO_BRIGHT = (60, 160, 255)
+ASTRO_DIM = (10, 50, 160)
+SCREEN_BG = (2, 3, 8)
+
+# LED dot matrix settings
+DOT_SPACING = 6      # pixels between dot centers
+DOT_RADIUS = 2.0     # radius of each LED dot
+GLOW_RADIUS = 10     # blur radius for the glow effect
 
 ASTRO_MOODS = {
-    "neutral": {
-        "id": "neutral", "name": "Neutral",
-        "desc": "Default rounded oval eyes",
-    },
-    "happy": {
-        "id": "happy", "name": "Happy",
-        "desc": "Upward arc eyes (^_^)",
-    },
-    "excited": {
-        "id": "excited", "name": "Excited",
-        "desc": "Large round sparkling eyes",
-    },
-    "sad": {
-        "id": "sad", "name": "Sad",
-        "desc": "Drooping downturned eyes",
-    },
-    "angry": {
-        "id": "angry", "name": "Angry",
-        "desc": "Angled inward slanted eyes",
-    },
-    "surprised": {
-        "id": "surprised", "name": "Surprised",
-        "desc": "Wide open round eyes",
-    },
-    "love": {
-        "id": "love", "name": "Love",
-        "desc": "Heart-shaped eyes",
-    },
-    "star": {
-        "id": "star", "name": "Star Eyes",
-        "desc": "Star-shaped amazed eyes",
-    },
-    "dizzy": {
-        "id": "dizzy", "name": "Dizzy",
-        "desc": "Spiral dazed eyes",
-    },
-    "tired": {
-        "id": "tired", "name": "Tired",
-        "desc": "Half-closed droopy eyes",
-    },
-    "wink": {
-        "id": "wink", "name": "Wink",
-        "desc": "One eye winking",
-    },
-    "determined": {
-        "id": "determined", "name": "Determined",
-        "desc": "Narrowed focused eyes",
-    },
-    "worried": {
-        "id": "worried", "name": "Worried",
-        "desc": "Uneven anxious eyes",
-    },
-    "celebrating": {
-        "id": "celebrating", "name": "Celebrating",
-        "desc": "Sparkling party eyes",
-    },
+    "neutral": {"id": "neutral", "name": "Neutral"},
+    "happy": {"id": "happy", "name": "Happy"},
+    "excited": {"id": "excited", "name": "Excited"},
+    "sad": {"id": "sad", "name": "Sad"},
+    "angry": {"id": "angry", "name": "Angry"},
+    "surprised": {"id": "surprised", "name": "Surprised"},
+    "love": {"id": "love", "name": "Love"},
+    "star": {"id": "star", "name": "Star Eyes"},
+    "dizzy": {"id": "dizzy", "name": "Dizzy"},
+    "tired": {"id": "tired", "name": "Tired"},
+    "wink": {"id": "wink", "name": "Wink"},
+    "determined": {"id": "determined", "name": "Determined"},
+    "worried": {"id": "worried", "name": "Worried"},
+    "celebrating": {"id": "celebrating", "name": "Celebrating"},
+    "scared": {"id": "scared", "name": "Scared"},
+    "crying": {"id": "crying", "name": "Crying"},
+    "laughing": {"id": "laughing", "name": "Laughing"},
+    "x_eyes": {"id": "x_eyes", "name": "Stunned"},
+    "confused": {"id": "confused", "name": "Confused"},
+    "sleepy": {"id": "sleepy", "name": "Sleepy"},
+    "mischievous": {"id": "mischievous", "name": "Mischievous"},
 }
 
 
 def _star_points(cx, cy, outer_r, inner_r, points=5, rotation=0):
-    """Generate star polygon vertices."""
     result = []
     for i in range(points * 2):
         angle = math.radians(rotation + i * 180 / points - 90)
@@ -85,42 +53,53 @@ def _star_points(cx, cy, outer_r, inner_r, points=5, rotation=0):
     return result
 
 
-def _heart_points(cx, cy, w, h, n=40):
-    """Generate heart shape as polygon points."""
-    points = []
-    for i in range(n):
-        t = 2 * math.pi * i / n
-        x = 16 * math.sin(t) ** 3
-        y = -(13 * math.cos(t) - 5 * math.cos(2 * t) -
-              2 * math.cos(3 * t) - math.cos(4 * t))
-        points.append((cx + x * w / 34.0, cy + y * h / 34.0))
-    return points
+def _heart_contains(px, py, cx, cy, w, h):
+    """Check if point (px, py) is inside a heart shape centered at (cx, cy)."""
+    # Normalize to parametric heart space (-17..17)
+    nx = (px - cx) / w * 34.0
+    ny = -(py - cy) / h * 34.0  # flip y
+    # Heart implicit: (x^2 + y^2 - 1)^3 - x^2 * y^3 < 0
+    # Simplified heart test
+    nx2 = (nx / 16.0)
+    ny2 = (ny + 2) / 17.0
+    val = (nx2 * nx2 + ny2 * ny2 - 1)
+    val = val * val * val - nx2 * nx2 * ny2 * ny2 * ny2
+    return val < 0
 
 
 class AstroEyeRenderer:
-    """Renders one Astro Bot-inspired LED eye with expressive mood shapes."""
+    """Renders one Astro Bot-inspired LED dot-matrix eye with glow."""
 
     SIZE = 240
     CENTER = 120
 
-    # Eye positioning — offset from center of display
-    EYE_OFFSET_X = 0   # adjusted per mood
-    GAZE_RANGE_X = 40
-    GAZE_RANGE_Y = 30
-
-    TRANSITION_DURATION = 0.2
+    GAZE_RANGE_X = 35
+    GAZE_RANGE_Y = 25
 
     def __init__(self, config: EyeConfig, is_left: bool = True):
         self._config = config
         self._is_left = is_left
+
+        # Shape layer: draw shapes here, then sample for dot mask
+        self._shape = Image.new("RGB", (self.SIZE, self.SIZE), SCREEN_BG)
+        self._shape_draw = ImageDraw.Draw(self._shape)
+
+        # Dot layer: LED dots drawn here
+        self._dots = Image.new("RGB", (self.SIZE, self.SIZE), SCREEN_BG)
+        self._dots_draw = ImageDraw.Draw(self._dots)
+
+        # Final composited image
         self._img = Image.new("RGB", (self.SIZE, self.SIZE), SCREEN_BG)
-        self._draw = ImageDraw.Draw(self._img)
 
         self._mood_id = "neutral"
-        self._prev_mood_id = "neutral"
-        self._transition_start = 0.0
-        self._transitioning = False
-        self.glow_enabled = False
+        self.glow_enabled = True  # glow always on — it's the Astro look
+
+        # Pre-compute dot grid positions
+        self._dot_grid = []
+        for y in range(0, self.SIZE, DOT_SPACING):
+            for x in range(0, self.SIZE, DOT_SPACING):
+                self._dot_grid.append((x + DOT_SPACING // 2,
+                                       y + DOT_SPACING // 2))
 
     @property
     def mood_id(self):
@@ -132,292 +111,401 @@ class AstroEyeRenderer:
     def set_mood(self, mood_id: str) -> bool:
         if mood_id not in ASTRO_MOODS:
             return False
-        if mood_id == self._mood_id:
-            return True
-        self._prev_mood_id = self._mood_id
         self._mood_id = mood_id
-        self._transition_start = time.monotonic()
-        self._transitioning = True
         return True
 
     def render(self, state: EyeState) -> Image.Image:
-        d = self._draw
-        d.rectangle([0, 0, self.SIZE - 1, self.SIZE - 1], fill=SCREEN_BG)
+        sd = self._shape_draw
+        dd = self._dots_draw
+
+        # Clear both layers
+        sd.rectangle([0, 0, self.SIZE - 1, self.SIZE - 1], fill=SCREEN_BG)
+        dd.rectangle([0, 0, self.SIZE - 1, self.SIZE - 1], fill=SCREEN_BG)
 
         # Gaze offset
         cx = self.CENTER + state.pupil_x * self.GAZE_RANGE_X
         cy = self.CENTER + state.pupil_y * self.GAZE_RANGE_Y
 
-        # Blink: scale_y controls vertical squash
+        # Blink
         scale_y = 1.0 - state.upper_eyelid * 0.95
         if scale_y < 0.05:
-            self._clip_circle(d)
+            self._img.paste(SCREEN_BG, (0, 0, self.SIZE, self.SIZE))
+            self._clip_circle_img()
             return self._img
 
-        # Transition alpha
-        if self._transitioning:
-            elapsed = time.monotonic() - self._transition_start
-            t = min(1.0, elapsed / self.TRANSITION_DURATION)
-            if t >= 1.0:
-                self._transitioning = False
-        else:
-            t = 1.0
+        # Draw the shape onto the shape layer (solid fill)
+        self._draw_mood(sd, self._mood_id, cx, cy, scale_y)
 
-        # Draw the current mood's eye shape
-        self._draw_mood(d, self._mood_id, cx, cy, scale_y)
+        # Sample the shape layer to create LED dot pattern
+        shape_data = self._shape.load()
+        r = DOT_RADIUS
+        for gx, gy in self._dot_grid:
+            # Sample the shape layer at this grid position
+            sx = min(max(int(gx), 0), self.SIZE - 1)
+            sy = min(max(int(gy), 0), self.SIZE - 1)
+            pixel = shape_data[sx, sy]
+            # If the pixel is not background, draw a dot
+            if pixel[0] > 10 or pixel[1] > 10 or pixel[2] > 10:
+                dd.ellipse([gx - r, gy - r, gx + r, gy + r], fill=pixel)
+
+        # Composite: glow (blurred dots) + sharp dots on top
+        glow = self._dots.filter(ImageFilter.GaussianBlur(radius=GLOW_RADIUS))
+        self._img.paste(glow, (0, 0))
+        # Paste dots on top using their luminance as mask
+        self._img.paste(self._dots, (0, 0), self._dots.convert("L"))
 
         # Clip to round display
-        self._clip_circle(d)
+        self._clip_circle_img()
 
         return self._img
 
     def _draw_mood(self, d, mood_id, cx, cy, scale_y):
-        """Dispatch to the appropriate mood drawing method."""
         method = getattr(self, f"_draw_{mood_id}", None)
         if method:
             method(d, cx, cy, scale_y)
         else:
             self._draw_neutral(d, cx, cy, scale_y)
 
-    # --- Mood renderers ---
+    # --- Mood renderers (draw solid shapes on shape layer) ---
 
     def _draw_neutral(self, d, cx, cy, scale_y):
-        """Default: rounded oval eyes, slightly tilted inward."""
-        w, h = 60, 80
-        h = h * scale_y
-        r = 25
-        tilt = 8 if self._is_left else -8
-        self._rounded_rect(d, cx, cy + tilt * 0.3, w, h, r, ASTRO_BLUE)
-        self._highlight(d, cx - 10, cy - h * 0.25, 8, 5)
+        """Soft tapered oval — wider at top, narrower at bottom."""
+        w_top, w_bot = 65, 50
+        h = 90 * scale_y
+        self._tapered_oval(d, cx, cy, w_top, w_bot, h, ASTRO_BLUE)
 
     def _draw_happy(self, d, cx, cy, scale_y):
-        """Upward arc eyes — (^_^) style."""
-        w = 70
+        """Upward arc eyes — squinted happy (^_^)."""
+        w_top, w_bot = 70, 55
         h = 50 * scale_y
-        lw = 14
-        bbox = [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2]
-        d.arc(bbox, start=200, end=340, fill=ASTRO_BLUE, width=lw)
-        # Small sparkle
-        sx = cx + (15 if self._is_left else -15)
-        sy = cy - h * 0.4
-        self._dot(d, sx, sy, 4, ASTRO_BRIGHT)
+        self._tapered_oval(d, cx, cy + 5, w_top, w_bot, h, ASTRO_BLUE)
+        # Cut out top portion to create arc effect
+        cut_h = h * 0.5
+        d.rectangle([cx - w_top, cy + 5 - h / 2,
+                     cx + w_top, cy + 5 - h / 2 + cut_h], fill=SCREEN_BG)
 
     def _draw_excited(self, d, cx, cy, scale_y):
-        """Large round sparkling eyes."""
-        r = 50 * scale_y
-        self._circle(d, cx, cy, r, ASTRO_BLUE)
-        # Big highlight
-        self._highlight(d, cx - 15, cy - 15, 12, 8)
-        # Small secondary highlight
-        self._dot(d, cx + 12, cy + 10, 5, ASTRO_BRIGHT)
-        # Sparkle crosses
-        now = time.monotonic()
-        sparkle_r = 58 + 5 * math.sin(now * 4)
-        for i in range(4):
-            angle = math.radians(now * 60 + i * 90)
-            sx = cx + sparkle_r * math.cos(angle) * 0.7
-            sy = cy + sparkle_r * math.sin(angle) * scale_y * 0.7
-            self._dot(d, sx, sy, 3, ASTRO_BRIGHT)
+        """Large round eyes."""
+        r = 55 * scale_y
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ASTRO_BRIGHT)
 
     def _draw_sad(self, d, cx, cy, scale_y):
-        """Drooping downturned eyes."""
-        w, h = 60, 65
-        h = h * scale_y
-        r = 20
-        # Tilt downward on outer edge
-        tilt = -12 if self._is_left else 12
-        # Draw main eye shape shifted down slightly
-        self._rounded_rect(d, cx, cy + 8, w, h, r, ASTRO_DIM)
-        # Droopy eyelid effect — dark arc at top
-        lid_w = w + 10
-        lid_h = 30
-        lid_bbox = [cx - lid_w / 2, cy - 10, cx + lid_w / 2, cy + lid_h - 10]
-        tilt_y = -6 if self._is_left else 6
-        # Angled dark bar at top of eye
+        """Drooping eyes — angled down on outer edge."""
+        w_top, w_bot = 60, 50
+        h = 70 * scale_y
+        self._tapered_oval(d, cx, cy + 10, w_top, w_bot, h, ASTRO_DIM)
+        # Angled eyelid cut at top
+        tilt = -15 if self._is_left else 15
         pts = [
-            (cx - w / 2 - 5, cy - h / 2 + 8 + tilt_y),
-            (cx + w / 2 + 5, cy - h / 2 + 8 - tilt_y),
-            (cx + w / 2 + 5, cy - h / 2 - 10 - tilt_y),
-            (cx - w / 2 - 5, cy - h / 2 - 10 + tilt_y),
+            (cx - w_top - 5, cy + 10 - h / 2 + 10 + tilt),
+            (cx + w_top + 5, cy + 10 - h / 2 + 10 - tilt),
+            (cx + w_top + 5, cy + 10 - h / 2 - 15),
+            (cx - w_top - 5, cy + 10 - h / 2 - 15),
         ]
         d.polygon(pts, fill=SCREEN_BG)
-        self._highlight(d, cx - 8, cy - 5, 6, 4)
 
     def _draw_angry(self, d, cx, cy, scale_y):
-        """Angled inward slanted eyes — V shape brow."""
-        w, h = 70, 55
-        h = h * scale_y
-        r = 18
-        self._rounded_rect(d, cx, cy, w, h, r, ASTRO_BLUE)
-        # Angry brow — thick dark triangle at top
+        """Angled inward — V brow cut."""
+        w_top, w_bot = 70, 55
+        h = 60 * scale_y
+        self._tapered_oval(d, cx, cy, w_top, w_bot, h, ASTRO_BLUE)
+        # V-shaped brow cut
         inward = -1 if self._is_left else 1
         pts = [
-            (cx - w / 2 - 8, cy - h / 2 - 4 + 20 * inward),
-            (cx + w / 2 + 8, cy - h / 2 - 4 - 20 * inward),
-            (cx + w / 2 + 8, cy - h / 2 - 22 - 20 * inward),
-            (cx - w / 2 - 8, cy - h / 2 - 22 + 20 * inward),
+            (cx - w_top - 5, cy - h / 2 + 5 + 25 * inward),
+            (cx + w_top + 5, cy - h / 2 + 5 - 25 * inward),
+            (cx + w_top + 5, cy - h / 2 - 20),
+            (cx - w_top - 5, cy - h / 2 - 20),
         ]
         d.polygon(pts, fill=SCREEN_BG)
-        # Red tinge at edges
-        self._highlight(d, cx - 8, cy - 5, 5, 3)
 
     def _draw_surprised(self, d, cx, cy, scale_y):
         """Wide open round eyes."""
-        r = 55 * scale_y
-        self._circle(d, cx, cy, r, ASTRO_BLUE)
-        # Inner dark pupil
-        pr = 20 * scale_y
-        self._circle(d, cx, cy, pr, SCREEN_BG)
-        # Bright ring
-        d.ellipse([cx - r, cy - r, cx + r, cy + r],
-                  outline=ASTRO_BRIGHT, width=3)
-        self._highlight(d, cx - 15, cy - 18, 10, 7)
+        r = 60 * scale_y
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ASTRO_BRIGHT)
+        # Dark inner pupil
+        pr = 22 * scale_y
+        d.ellipse([cx - pr, cy - pr, cx + pr, cy + pr], fill=SCREEN_BG)
 
     def _draw_love(self, d, cx, cy, scale_y):
-        """Heart-shaped eyes."""
-        w = 70
-        h = 65 * scale_y
-        points = _heart_points(cx, cy - 5, w, h)
-        d.polygon(points, fill=(255, 60, 150))
-        # Highlight
-        self._highlight(d, cx - 12, cy - h * 0.3, 7, 5)
+        """Heart-shaped eyes — blue like the reference."""
+        w, h = 75, 70 * scale_y
+        # Draw heart using parametric polygon
+        points = []
+        n = 50
+        for i in range(n):
+            t = 2 * math.pi * i / n
+            x = 16 * math.sin(t) ** 3
+            y = -(13 * math.cos(t) - 5 * math.cos(2 * t) -
+                  2 * math.cos(3 * t) - math.cos(4 * t))
+            points.append((cx + x * w / 34.0, cy + y * h / 34.0))
+        d.polygon(points, fill=ASTRO_BLUE)
 
     def _draw_star(self, d, cx, cy, scale_y):
-        """Star-shaped amazed eyes."""
-        outer = 50 * scale_y
-        inner = 22 * scale_y
-        # Slowly rotate
+        """Star-shaped eyes — slowly rotating."""
         now = time.monotonic()
         rot = (now * 30) % 360
-        points = _star_points(cx, cy, outer, inner, points=5, rotation=rot)
-        d.polygon(points, fill=ASTRO_BRIGHT)
-        # Center dot
-        self._dot(d, cx, cy, 6 * scale_y, HIGHLIGHT)
+        outer = 55 * scale_y
+        inner = 25 * scale_y
+        pts = _star_points(cx, cy, outer, inner, points=5, rotation=rot)
+        d.polygon(pts, fill=ASTRO_BRIGHT)
 
     def _draw_dizzy(self, d, cx, cy, scale_y):
         """Spiral dazed eyes."""
         now = time.monotonic()
-        rot_offset = now * 120  # degrees per second
-        r_max = 40 * scale_y
-        steps = 80
+        rot = now * 120
+        r_max = 45 * scale_y
+        # Draw spiral as thick arc segments
+        steps = 100
         for i in range(1, steps):
             t = i / steps
             r = r_max * t
-            angle = math.radians(t * 720 + rot_offset)
+            angle = math.radians(t * 720 + rot)
             x = cx + r * math.cos(angle)
-            y = cy + r * math.sin(angle) * scale_y
-            dot_size = 2 + t * 2
-            alpha = t
+            y = cy + r * math.sin(angle)
+            dot_r = 2 + t * 2.5
+            brightness = t
             color = (
-                int(ASTRO_BLUE[0] * alpha),
-                int(ASTRO_BLUE[1] * alpha),
-                int(ASTRO_BLUE[2] * alpha),
+                int(ASTRO_BLUE[0] * brightness),
+                int(ASTRO_BLUE[1] * brightness),
+                int(ASTRO_BLUE[2] * brightness),
             )
-            d.ellipse([x - dot_size, y - dot_size,
-                       x + dot_size, y + dot_size], fill=color)
+            d.ellipse([x - dot_r, y - dot_r, x + dot_r, y + dot_r], fill=color)
 
     def _draw_tired(self, d, cx, cy, scale_y):
-        """Half-closed droopy eyes."""
-        w, h = 70, 35
-        h = h * scale_y
-        r = 15
-        # Flat, low eye
-        self._rounded_rect(d, cx, cy + 15, w, h, r, ASTRO_DIM)
-        self._highlight(d, cx - 10, cy + 8, 5, 3)
+        """Half-closed flat eyes."""
+        w_top, w_bot = 70, 55
+        h = 30 * scale_y
+        self._tapered_oval(d, cx, cy + 18, w_top, w_bot, h, ASTRO_DIM)
 
     def _draw_wink(self, d, cx, cy, scale_y):
-        """One eye open, one winking arc."""
+        """Left eye normal, right eye winking arc."""
         if self._is_left:
-            # Left eye: open normal
-            w, h = 60, 80
-            h = h * scale_y
-            self._rounded_rect(d, cx, cy, w, h, 25, ASTRO_BLUE)
-            self._highlight(d, cx - 10, cy - h * 0.25, 8, 5)
+            w_top, w_bot = 65, 50
+            h = 90 * scale_y
+            self._tapered_oval(d, cx, cy, w_top, w_bot, h, ASTRO_BLUE)
         else:
-            # Right eye: winking arc
+            # Winking arc — thick curved line
             w = 65
             h = 40 * scale_y
-            lw = 14
+            lw = 16
             bbox = [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2]
             d.arc(bbox, start=10, end=170, fill=ASTRO_BLUE, width=lw)
 
     def _draw_determined(self, d, cx, cy, scale_y):
-        """Narrowed focused eyes."""
-        w, h = 80, 40
-        h = h * scale_y
-        r = 15
-        self._rounded_rect(d, cx, cy, w, h, r, ASTRO_BLUE)
-        # Slight inward angle
+        """Narrowed focused eyes with slight inward angle."""
+        w_top, w_bot = 80, 65
+        h = 40 * scale_y
+        self._tapered_oval(d, cx, cy, w_top, w_bot, h, ASTRO_BLUE)
         inward = -1 if self._is_left else 1
         pts = [
-            (cx - w / 2 - 5, cy - h / 2 - 2 + 8 * inward),
-            (cx + w / 2 + 5, cy - h / 2 - 2 - 8 * inward),
-            (cx + w / 2 + 5, cy - h / 2 - 14 - 8 * inward),
-            (cx - w / 2 - 5, cy - h / 2 - 14 + 8 * inward),
+            (cx - w_top - 5, cy - h / 2 + 3 + 10 * inward),
+            (cx + w_top + 5, cy - h / 2 + 3 - 10 * inward),
+            (cx + w_top + 5, cy - h / 2 - 15),
+            (cx - w_top - 5, cy - h / 2 - 15),
         ]
         d.polygon(pts, fill=SCREEN_BG)
-        self._highlight(d, cx - 8, cy - 5, 6, 4)
 
     def _draw_worried(self, d, cx, cy, scale_y):
-        """Uneven anxious eyes — one slightly higher."""
-        w, h = 55, 70
-        h = h * scale_y
-        r = 22
-        y_shift = -8 if self._is_left else 8
-        self._rounded_rect(d, cx, cy + y_shift, w, h, r, ASTRO_BLUE)
-        # Worried brow — slight upward angle on inner side
+        """Uneven eyes — one higher, with upward inner brow."""
+        w_top, w_bot = 55, 45
+        h = 75 * scale_y
+        y_shift = -10 if self._is_left else 10
+        self._tapered_oval(d, cx, cy + y_shift, w_top, w_bot, h, ASTRO_BLUE)
         inward = 1 if self._is_left else -1
         pts = [
-            (cx - w / 2 - 5, cy + y_shift - h / 2 - 2 - 10 * inward),
-            (cx + w / 2 + 5, cy + y_shift - h / 2 - 2 + 10 * inward),
-            (cx + w / 2 + 5, cy + y_shift - h / 2 - 14 + 10 * inward),
-            (cx - w / 2 - 5, cy + y_shift - h / 2 - 14 - 10 * inward),
+            (cx - w_top - 5, cy + y_shift - h / 2 + 5 - 12 * inward),
+            (cx + w_top + 5, cy + y_shift - h / 2 + 5 + 12 * inward),
+            (cx + w_top + 5, cy + y_shift - h / 2 - 15),
+            (cx - w_top - 5, cy + y_shift - h / 2 - 15),
         ]
         d.polygon(pts, fill=SCREEN_BG)
-        self._highlight(d, cx - 8, cy + y_shift - h * 0.2, 6, 4)
 
     def _draw_celebrating(self, d, cx, cy, scale_y):
-        """Sparkling party eyes with animated sparkles."""
-        # Base: excited round eye
-        r = 45 * scale_y
-        self._circle(d, cx, cy, r, ASTRO_BLUE)
-        self._highlight(d, cx - 12, cy - 12, 10, 7)
-
-        # Animated sparkles around the eye
+        """Round eyes with animated sparkle ring."""
+        r = 50 * scale_y
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ASTRO_BLUE)
+        # Sparkle ring
         now = time.monotonic()
         for i in range(6):
             angle = math.radians(now * 80 + i * 60)
-            dist = 60 + 8 * math.sin(now * 3 + i)
-            sx = cx + dist * math.cos(angle) * 0.8
-            sy = cy + dist * math.sin(angle) * scale_y * 0.8
-            # Draw tiny 4-pointed star
-            sr = 4 + 2 * math.sin(now * 5 + i * 2)
+            dist = 65
+            sx = cx + dist * math.cos(angle)
+            sy = cy + dist * math.sin(angle) * scale_y
+            sr = 5 + 3 * math.sin(now * 5 + i * 2)
             pts = _star_points(sx, sy, sr, sr * 0.3, points=4,
                                rotation=(now * 90 + i * 45) % 360)
             d.polygon(pts, fill=ASTRO_BRIGHT)
 
-    # --- Drawing helpers ---
+    def _draw_scared(self, d, cx, cy, scale_y):
+        """Small shrunk eyes with tiny pupils — trembling."""
+        now = time.monotonic()
+        tremble_x = math.sin(now * 25) * 3
+        tremble_y = math.cos(now * 30) * 2
+        ex = cx + tremble_x
+        ey = cy + tremble_y
+        # Small round eye
+        r = 40 * scale_y
+        d.ellipse([ex - r, ey - r, ex + r, ey + r], fill=ASTRO_BRIGHT)
+        # Tiny pupil (fear = constricted)
+        pr = 12 * scale_y
+        d.ellipse([ex - pr, ey - pr, ex + pr, ey + pr], fill=SCREEN_BG)
 
-    def _rounded_rect(self, d, cx, cy, w, h, r, color):
-        r = min(r, int(w) // 2, int(h) // 2)
-        d.rounded_rectangle(
-            [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2],
-            radius=r, fill=color,
-        )
+    def _draw_crying(self, d, cx, cy, scale_y):
+        """Sad droopy eyes with animated tear streams."""
+        # Sad eye shape
+        w_top, w_bot = 55, 45
+        h = 60 * scale_y
+        self._tapered_oval(d, cx, cy + 5, w_top, w_bot, h, ASTRO_DIM)
+        # Angled sad brow
+        tilt = -12 if self._is_left else 12
+        pts = [
+            (cx - w_top - 5, cy + 5 - h / 2 + 8 + tilt),
+            (cx + w_top + 5, cy + 5 - h / 2 + 8 - tilt),
+            (cx + w_top + 5, cy + 5 - h / 2 - 15),
+            (cx - w_top - 5, cy + 5 - h / 2 - 15),
+        ]
+        d.polygon(pts, fill=SCREEN_BG)
+        # Animated tear drops falling from bottom of eye
+        now = time.monotonic()
+        tear_x = cx + (10 if self._is_left else -10)
+        for i in range(3):
+            phase = (now * 2.5 + i * 0.7) % 2.0
+            if phase < 1.5:
+                tear_y = cy + 5 + h / 2 + phase * 50
+                tear_r = 5 - phase * 2.5
+                if tear_r > 0:
+                    d.ellipse([tear_x - tear_r, tear_y - tear_r,
+                               tear_x + tear_r, tear_y + tear_r],
+                              fill=ASTRO_BRIGHT)
 
-    def _circle(self, d, cx, cy, r, color):
-        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color)
+    def _draw_laughing(self, d, cx, cy, scale_y):
+        """Tightly squinted XD eyes — upside-down U arcs."""
+        w = 60
+        h = 50 * scale_y
+        lw = 18
+        # Upside-down U shape (bottom arc)
+        bbox = [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2]
+        d.arc(bbox, start=190, end=350, fill=ASTRO_BRIGHT, width=lw)
 
-    def _dot(self, d, cx, cy, r, color):
-        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color)
+    def _draw_x_eyes(self, d, cx, cy, scale_y):
+        """X-shaped stunned/KO eyes."""
+        size = 45 * scale_y
+        lw = 14
+        d.line([(cx - size, cy - size), (cx + size, cy + size)],
+               fill=ASTRO_DIM, width=lw)
+        d.line([(cx + size, cy - size), (cx - size, cy + size)],
+               fill=ASTRO_DIM, width=lw)
 
-    def _highlight(self, d, x, y, w, h):
-        """Small white specular highlight — Astro Bot signature."""
-        d.ellipse([x - w / 2, y - h / 2, x + w / 2, y + h / 2],
-                  fill=HIGHLIGHT)
+    def _draw_confused(self, d, cx, cy, scale_y):
+        """Asymmetric eyes — one big, one small, with tilted brow."""
+        if self._is_left:
+            # Bigger eye, raised
+            r = 50 * scale_y
+            d.ellipse([cx - r, cy - 8 - r, cx + r, cy - 8 + r],
+                      fill=ASTRO_BLUE)
+        else:
+            # Smaller squinting eye
+            w_top, w_bot = 50, 40
+            h = 35 * scale_y
+            self._tapered_oval(d, cx, cy + 8, w_top, w_bot, h, ASTRO_BLUE)
+            # Tilted brow
+            pts = [
+                (cx - w_top - 5, cy + 8 - h / 2 - 2),
+                (cx + w_top + 5, cy + 8 - h / 2 + 12),
+                (cx + w_top + 5, cy + 8 - h / 2 - 15),
+                (cx - w_top - 5, cy + 8 - h / 2 - 15),
+            ]
+            d.polygon(pts, fill=SCREEN_BG)
 
-    def _clip_circle(self, d):
-        """Black out corners outside the round display."""
+    def _draw_sleepy(self, d, cx, cy, scale_y):
+        """Barely-open slit eyes with floating Z letters."""
+        # Thin slit eye
+        w = 55
+        h = 12 * scale_y
+        lw = 14
+        bbox = [cx - w / 2, cy + 10 - h, cx + w / 2, cy + 10 + h]
+        d.arc(bbox, start=200, end=340, fill=ASTRO_DIM, width=lw)
+        # Animated Z letters floating up
+        now = time.monotonic()
+        for i in range(3):
+            phase = (now * 0.8 + i * 1.2) % 3.0
+            zx = cx + 30 + i * 15
+            zy = cy - 20 - phase * 30
+            z_size = 6 + i * 3
+            alpha = max(0.0, 1.0 - phase / 3.0)
+            z_color = (
+                int(ASTRO_BLUE[0] * alpha),
+                int(ASTRO_BLUE[1] * alpha),
+                int(ASTRO_BLUE[2] * alpha),
+            )
+            if z_color[2] > 15:
+                # Draw Z shape
+                d.line([(zx - z_size, zy - z_size),
+                        (zx + z_size, zy - z_size)],
+                       fill=z_color, width=3)
+                d.line([(zx + z_size, zy - z_size),
+                        (zx - z_size, zy + z_size)],
+                       fill=z_color, width=3)
+                d.line([(zx - z_size, zy + z_size),
+                        (zx + z_size, zy + z_size)],
+                       fill=z_color, width=3)
+
+    def _draw_mischievous(self, d, cx, cy, scale_y):
+        """Sly asymmetric look — one eye normal, one narrowed smugly."""
+        if self._is_left:
+            # Normal-ish eye but slightly narrowed at top
+            w_top, w_bot = 60, 50
+            h = 70 * scale_y
+            self._tapered_oval(d, cx, cy, w_top, w_bot, h, ASTRO_BLUE)
+            # Slight smug brow angle
+            pts = [
+                (cx - w_top - 5, cy - h / 2 + 8),
+                (cx + w_top + 5, cy - h / 2 + 2),
+                (cx + w_top + 5, cy - h / 2 - 15),
+                (cx - w_top - 5, cy - h / 2 - 15),
+            ]
+            d.polygon(pts, fill=SCREEN_BG)
+        else:
+            # Narrowed sly eye
+            w = 65
+            h = 35 * scale_y
+            lw = 16
+            bbox = [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2]
+            d.arc(bbox, start=195, end=345, fill=ASTRO_BLUE, width=lw)
+
+    # --- Shape helpers ---
+
+    def _tapered_oval(self, d, cx, cy, w_top, w_bot, h, color):
+        """Draw a soft tapered oval — wider at top, narrower at bottom.
+        This is the signature Astro Bot eye shape."""
+        points = []
+        steps = 40
+        half_h = h / 2
+        for i in range(steps + 1):
+            t = i / steps  # 0..1, top to bottom
+            y = cy - half_h + t * h
+            # Interpolate width from top to bottom
+            w = w_top + (w_bot - w_top) * t
+            # Use sine for smooth rounding
+            angle = t * math.pi
+            roundness = math.sin(angle)
+            x_offset = (w / 2) * roundness
+            points.append((cx + x_offset, y))
+        # Return back on the left side
+        for i in range(steps, -1, -1):
+            t = i / steps
+            y = cy - half_h + t * h
+            w = w_top + (w_bot - w_top) * t
+            angle = t * math.pi
+            roundness = math.sin(angle)
+            x_offset = (w / 2) * roundness
+            points.append((cx - x_offset, y))
+        d.polygon(points, fill=color)
+
+    def _clip_circle_img(self):
+        """Black out corners outside the round display on the final image."""
+        d = ImageDraw.Draw(self._img)
         r = 118
         cx = cy = self.CENTER
         steps = 60
