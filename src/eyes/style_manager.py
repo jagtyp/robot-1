@@ -11,6 +11,7 @@ from src.eyes.cartoon_renderer import CartoonEyeRenderer
 from src.eyes.cyborg_renderer import CyborgEyeRenderer
 from src.eyes.neon_renderer import NeonEyeRenderer
 from src.eyes.cat_renderer import CatEyeRenderer
+from src.eyes.astro_renderer import AstroEyeRenderer
 
 log = logging.getLogger("robot-head")
 
@@ -67,6 +68,11 @@ class StyleManager:
             "name": "Cat Eye",
             "type": "cat",
         }
+        self._styles["astro"] = {
+            "id": "astro",
+            "name": "Astro Bot",
+            "type": "astro",
+        }
 
         # Discover sprite styles from assets directory
         assets_dir = Path(config.assets_dir)
@@ -110,6 +116,9 @@ class StyleManager:
         elif style["type"] == "cat":
             self._left = CatEyeRenderer(self._config, is_left=True)
             self._right = CatEyeRenderer(self._config, is_left=False)
+        elif style["type"] == "astro":
+            self._left = AstroEyeRenderer(self._config, is_left=True)
+            self._right = AstroEyeRenderer(self._config, is_left=False)
 
     def get_styles(self) -> list[dict]:
         """Return list of all available styles with active flag."""
