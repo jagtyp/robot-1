@@ -43,6 +43,27 @@ class TrackingConfig:
 
 
 @dataclass
+class MoodEngineConfig:
+    enabled: bool = True
+    sleep_brightness: float = 25.0
+    wake_brightness: float = 45.0
+    dark_to_sleep_secs: float = 30.0
+    bright_to_wake_secs: float = 5.0
+    waking_duration: float = 3.0
+    idle_to_bored_secs: float = 120.0
+    face_lost_to_idle_secs: float = 5.0
+    engaged_to_bonded_secs: float = 60.0
+    bored_mood_cycle_secs: float = 20.0
+    motion_surprise_threshold: float = 0.05
+    personality_interval_min: float = 8.0
+    personality_interval_max: float = 15.0
+    bonded_affection_interval_min: float = 10.0
+    bonded_affection_interval_max: float = 25.0
+    manual_pause_secs: float = 30.0
+    brightness_tau: float = 1.0
+
+
+@dataclass
 class DebugConfig:
     web_port: int = 8080
 
@@ -53,6 +74,7 @@ class Config:
     eyes: EyeConfig = field(default_factory=EyeConfig)
     animation: AnimationConfig = field(default_factory=AnimationConfig)
     tracking: TrackingConfig = field(default_factory=TrackingConfig)
+    mood_engine: MoodEngineConfig = field(default_factory=MoodEngineConfig)
     debug: DebugConfig = field(default_factory=DebugConfig)
     log_level: str = "INFO"
 
@@ -108,6 +130,28 @@ def load_config(path: str = "config.yaml") -> Config:
             motion_min_area=t.get("motion_min_area", config.tracking.motion_min_area),
             smoothing=t.get("smoothing", config.tracking.smoothing),
             lost_timeout=t.get("lost_timeout", config.tracking.lost_timeout),
+        )
+
+    if "mood_engine" in data:
+        m = data["mood_engine"]
+        config.mood_engine = MoodEngineConfig(
+            enabled=m.get("enabled", config.mood_engine.enabled),
+            sleep_brightness=m.get("sleep_brightness", config.mood_engine.sleep_brightness),
+            wake_brightness=m.get("wake_brightness", config.mood_engine.wake_brightness),
+            dark_to_sleep_secs=m.get("dark_to_sleep_secs", config.mood_engine.dark_to_sleep_secs),
+            bright_to_wake_secs=m.get("bright_to_wake_secs", config.mood_engine.bright_to_wake_secs),
+            waking_duration=m.get("waking_duration", config.mood_engine.waking_duration),
+            idle_to_bored_secs=m.get("idle_to_bored_secs", config.mood_engine.idle_to_bored_secs),
+            face_lost_to_idle_secs=m.get("face_lost_to_idle_secs", config.mood_engine.face_lost_to_idle_secs),
+            engaged_to_bonded_secs=m.get("engaged_to_bonded_secs", config.mood_engine.engaged_to_bonded_secs),
+            bored_mood_cycle_secs=m.get("bored_mood_cycle_secs", config.mood_engine.bored_mood_cycle_secs),
+            motion_surprise_threshold=m.get("motion_surprise_threshold", config.mood_engine.motion_surprise_threshold),
+            personality_interval_min=m.get("personality_interval_min", config.mood_engine.personality_interval_min),
+            personality_interval_max=m.get("personality_interval_max", config.mood_engine.personality_interval_max),
+            bonded_affection_interval_min=m.get("bonded_affection_interval_min", config.mood_engine.bonded_affection_interval_min),
+            bonded_affection_interval_max=m.get("bonded_affection_interval_max", config.mood_engine.bonded_affection_interval_max),
+            manual_pause_secs=m.get("manual_pause_secs", config.mood_engine.manual_pause_secs),
+            brightness_tau=m.get("brightness_tau", config.mood_engine.brightness_tau),
         )
 
     if "debug" in data:

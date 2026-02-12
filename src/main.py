@@ -10,6 +10,8 @@ import time
 
 from src.config import load_config
 from src.state import load_state, apply_state
+from src.environment import EnvironmentState
+from src.mood_engine import MoodEngine
 from src.hardware.gpio_map import GPIOMap
 from src.display.gc9a01 import GC9A01
 from src.display.display_manager import DisplayManager
@@ -28,8 +30,11 @@ class RobotHead:
         self.config = load_config(config_path)
         self._debug = debug
         self._running = False
-        self._face_position = None
-        self._lock = threading.Lock()
+
+        # Environment state (replaces simple face_position/lock)
+        self._env_state = EnvironmentState(
+            brightness_tau=self.config.mood_engine.brightness_tau,
+        )
 
         # Debug state (only used if --debug)
         self._debug_state = None
@@ -64,17 +69,21 @@ class RobotHead:
         style_mgr = StyleManager(self.config.eyes)
         animator = EyeAnimator(self.config.animation)
 
+        # Mood engine
+        mood_engine = MoodEngine(self.config.mood_engine, style_mgr)
+
         # Start debug server if requested
         if self._debug:
             from src.debug.web_server import DebugState, start_debug_server
             self._debug_state = DebugState()
             self._debug_state.style_manager = style_mgr
+            self._debug_state.mood_engine = mood_engine
             start_debug_server(self._debug_state, self.config.debug.web_port)
             log.info(f"Debug server at http://0.0.0.0:{self.config.debug.web_port}")
 
-        # Restore persisted UI state (style, mood, glow, fps overlay)
+        # Restore persisted UI state (style, mood, glow, fps overlay, auto-mood)
         saved = load_state()
-        apply_state(saved, style_mgr, self._debug_state)
+        apply_state(saved, style_mgr, self._debug_state, mood_engine)
 
         # Start tracking thread
         tracking_thread = threading.Thread(target=self._tracking_loop, daemon=True)
@@ -87,6 +96,8 @@ class RobotHead:
         last_time = time.monotonic()
         frame_count = 0
         fps_timer = time.monotonic()
+        mood_timer = time.monotonic()
+        mood_tick_interval = 0.5  # ~2 Hz
 
         log.info(f"Entering render loop at {target_fps} FPS target")
 
@@ -96,9 +107,15 @@ class RobotHead:
                 dt = now - last_time
                 last_time = now
 
-                # Read face position
-                with self._lock:
-                    face_pos = self._face_position
+                # Read face position from environment state
+                face_pos = self._env_state.face_position
+
+                # Tick mood engine at ~2 Hz
+                if now - mood_timer >= mood_tick_interval:
+                    mood_dt = now - mood_timer
+                    mood_timer = now
+                    env_snap = self._env_state.get_snapshot()
+                    mood_engine.tick(mood_dt, env_snap)
 
                 # Animate
                 left_state, right_state = animator.update(dt, face_pos)
@@ -181,8 +198,11 @@ class RobotHead:
                     time.monotonic(),
                 )
 
-                with self._lock:
-                    self._face_position = position
+                self._env_state.update_from_tracking(
+                    grey, faces, position,
+                    self.config.tracking.lores_width,
+                    self.config.tracking.lores_height,
+                )
 
                 # Update debug state
                 if self._debug and self._debug_state:

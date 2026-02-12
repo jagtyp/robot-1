@@ -1,0 +1,13 @@
+[Unit]
+Description=WiFi Watchdog - restarts wlan0 on connectivity loss
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/robot-head/scripts/wifi_watchdog.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

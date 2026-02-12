@@ -28,6 +28,7 @@ class DebugState:
         self.fps_detect = 0.0   # Detection FPS
         self.face_detected = False
         self.style_manager = None  # Set by main.py if available
+        self.mood_engine = None    # Set by main.py if available
         self.show_fps = False     # FPS overlay on right eye display
 
     def update_frame(self, grey_frame: np.ndarray, faces: list):
@@ -125,6 +126,15 @@ img.stream { border:2px solid #0f0; margin-top:10px; }
     <label for="glow-toggle">Glow effect (slower)</label>
 </div>
 <div id="mood-msg"></div>
+</div>
+
+<div class="section">
+<h3>Auto Mood</h3>
+<div class="toggle-row">
+    <input type="checkbox" id="auto-mood-toggle" onchange="toggleAutoMood(this.checked)">
+    <label for="auto-mood-toggle">Autonomous mood engine</label>
+</div>
+<div id="auto-mood-status" style="margin-top:8px; font-size:12px; color:#888;"></div>
 </div>
 
 <script>
@@ -275,8 +285,38 @@ function toggleFps(enabled) {
     });
 }
 
+function toggleAutoMood(enabled) {
+    fetch('/api/mood-engine', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled: enabled})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.ok) {
+            document.getElementById('auto-mood-status').textContent = 'Error';
+        }
+    });
+}
+
+function pollAutoMood() {
+    fetch('/api/mood-engine')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('auto-mood-toggle').checked = !!data.enabled;
+            var s = 'State: ' + data.state;
+            if (data.override_remaining > 0) {
+                s += ' (manual override ' + data.override_remaining + 's)';
+            }
+            document.getElementById('auto-mood-status').textContent = s;
+        })
+        .catch(() => {});
+}
+
 loadStyles();
 loadFpsState();
+pollAutoMood();
+setInterval(pollAutoMood, 2000);
 </script>
 </body></html>
 """
@@ -298,6 +338,8 @@ class DebugHandler(BaseHTTPRequestHandler):
             self._send_json_glow()
         elif self.path == "/api/fps-overlay":
             self._send_json_fps_overlay()
+        elif self.path == "/api/mood-engine":
+            self._send_json_mood_engine()
         else:
             self.send_response(404)
             self.end_headers()
@@ -311,6 +353,8 @@ class DebugHandler(BaseHTTPRequestHandler):
             self._handle_set_glow()
         elif self.path == "/api/fps-overlay":
             self._handle_set_fps_overlay()
+        elif self.path == "/api/mood-engine":
+            self._handle_set_mood_engine()
         else:
             self.send_response(404)
             self.end_headers()
@@ -399,7 +443,11 @@ class DebugHandler(BaseHTTPRequestHandler):
             return
 
         if sm.set_cartoon_mood(mood_id):
-            save_state(sm, self.debug_state)
+            # Notify mood engine that user set mood manually
+            me = self.debug_state.mood_engine
+            if me is not None:
+                me.notify_manual_mood()
+            save_state(sm, self.debug_state, me)
             self._send_json({"ok": True})
         else:
             self._send_json({"ok": False, "error": f"unknown mood: {mood_id}"}, 400)
@@ -446,6 +494,31 @@ class DebugHandler(BaseHTTPRequestHandler):
         self.debug_state.show_fps = enabled
         save_state(self.debug_state.style_manager, self.debug_state)
         self._send_json({"ok": True})
+
+    def _send_json_mood_engine(self):
+        me = self.debug_state.mood_engine
+        if me is None:
+            self._send_json({"enabled": False, "state": "N/A", "override_remaining": 0})
+            return
+        self._send_json(me.get_status())
+
+    def _handle_set_mood_engine(self):
+        me = self.debug_state.mood_engine
+        if me is None:
+            self._send_json({"ok": False, "error": "no mood engine"}, 500)
+            return
+
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length))
+            enabled = bool(body.get("enabled", True))
+        except (json.JSONDecodeError, ValueError):
+            self._send_json({"ok": False, "error": "invalid JSON"}, 400)
+            return
+
+        me.enabled = enabled
+        save_state(self.debug_state.style_manager, self.debug_state, me)
+        self._send_json({"ok": True, "enabled": enabled})
 
     def log_message(self, format, *args):
         pass  # Suppress request logging

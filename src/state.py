@@ -13,6 +13,7 @@ ACTIVE_STYLE = "active_style"
 CARTOON_MOOD = "cartoon_mood"
 CARTOON_GLOW = "cartoon_glow"
 SHOW_FPS = "show_fps"
+AUTO_MOOD_ENABLED = "auto_mood_enabled"
 
 
 def _state_path() -> Path:
@@ -35,7 +36,7 @@ def load_state() -> dict:
         return {}
 
 
-def save_state(style_manager, debug_state=None):
+def save_state(style_manager, debug_state=None, mood_engine=None):
     """Snapshot current settings to disk."""
     data = {}
 
@@ -56,6 +57,9 @@ def save_state(style_manager, debug_state=None):
     if debug_state is not None:
         data[SHOW_FPS] = debug_state.show_fps
 
+    if mood_engine is not None:
+        data[AUTO_MOOD_ENABLED] = mood_engine.enabled
+
     try:
         with open(_state_path(), "w") as f:
             json.dump(data, f, indent=2)
@@ -63,7 +67,7 @@ def save_state(style_manager, debug_state=None):
         log.warning(f"Could not save state file: {e}")
 
 
-def apply_state(state: dict, style_manager, debug_state=None):
+def apply_state(state: dict, style_manager, debug_state=None, mood_engine=None):
     """Apply previously loaded state to the running system."""
     if not state:
         return
@@ -90,3 +94,10 @@ def apply_state(state: dict, style_manager, debug_state=None):
         show_fps = state.get(SHOW_FPS)
         if show_fps is not None:
             debug_state.show_fps = show_fps
+
+    # Restore auto-mood enabled
+    if mood_engine is not None:
+        auto_mood = state.get(AUTO_MOOD_ENABLED)
+        if auto_mood is not None:
+            mood_engine.enabled = auto_mood
+            log.info(f"Restored auto-mood: {'enabled' if auto_mood else 'disabled'}")

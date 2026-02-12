@@ -30,6 +30,23 @@ tracking:
   smoothing: 0.45                  # was 0.3 — faster lock-on
   lost_timeout: 1.5                # was 0.5 — keep tracking longer
 
+mood_engine:
+  enabled: true
+  sleep_brightness: 25        # below this = dark (0-255 Y-plane mean)
+  wake_brightness: 45         # above this = bright enough to wake
+  dark_to_sleep_secs: 30      # seconds of darkness before sleeping
+  bright_to_wake_secs: 5      # seconds of brightness before waking
+  waking_duration: 3.0        # seconds in WAKING state
+  idle_to_bored_secs: 120     # seconds idle before getting bored
+  face_lost_to_idle_secs: 5   # seconds after face lost to go idle
+  engaged_to_bonded_secs: 60  # seconds of continuous face for bonding
+  bored_mood_cycle_secs: 20   # seconds between bored mood changes
+  motion_surprise_threshold: 0.05  # motion level to trigger surprise
+  personality_interval_min: 8  # min seconds between personality events
+  personality_interval_max: 15 # max seconds between personality events
+  manual_pause_secs: 30       # seconds to pause auto-mood after manual change
+  brightness_tau: 1.0         # exponential smoothing time constant
+
 debug:
   web_port: 8080
 
