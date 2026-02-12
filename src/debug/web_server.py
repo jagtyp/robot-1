@@ -6,8 +6,11 @@ import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 
+import io
+
 import cv2
 import numpy as np
+from PIL import Image
 
 from src.state import save_state
 
@@ -30,6 +33,8 @@ class DebugState:
         self.style_manager = None  # Set by main.py if available
         self.mood_engine = None    # Set by main.py if available
         self.show_fps = False     # FPS overlay on right eye display
+        self._eye_jpeg = None     # Latest combined eye frame (JPEG bytes)
+        self._eye_update_time = 0  # Throttle eye JPEG encoding
 
     def update_frame(self, grey_frame: np.ndarray, faces: list):
         with self.lock:
@@ -73,13 +78,40 @@ class DebugState:
             _, jpeg = cv2.imencode(".jpg", display, [cv2.IMWRITE_JPEG_QUALITY, 70])
             return jpeg.tobytes()
 
+    def update_eyes(self, left_img: Image.Image, right_img: Image.Image):
+        """Stash the latest rendered eye frames as a combined JPEG.
+        Throttled to ~10 FPS to avoid wasting CPU on JPEG encoding."""
+        now = time.monotonic()
+        if now - self._eye_update_time < 0.1:
+            return
+        self._eye_update_time = now
+        # Place left and right side-by-side with a small gap
+        gap = 20
+        w, h = left_img.size
+        combined = Image.new("RGB", (w * 2 + gap, h), (0, 0, 0))
+        combined.paste(left_img, (0, 0))
+        combined.paste(right_img, (w + gap, 0))
+        buf = io.BytesIO()
+        combined.save(buf, format="JPEG", quality=85)
+        with self.lock:
+            self._eye_jpeg = buf.getvalue()
+
+    def get_eyes_jpeg(self) -> bytes | None:
+        with self.lock:
+            return self._eye_jpeg
+
 
 _INDEX_HTML = b"""\
 <html><head><title>Robot Head Debug</title>
 <style>
 body { background:#111; color:#0f0; font-family:monospace; text-align:center; margin:0; padding:20px; }
 h2 { margin-bottom: 10px; }
-img.stream { border:2px solid #0f0; margin-top:10px; }
+img.stream { border:2px solid #0f0; margin-top:10px; display:block; margin-left:auto; margin-right:auto; }
+.eye-preview { display: flex; justify-content: center; gap: 16px; margin-top: 12px; }
+.eye-preview img {
+    width: 200px; height: 200px; border-radius: 50%; border: 3px solid #333;
+    background: #000; object-fit: cover;
+}
 .section { margin-top: 20px; }
 .styles-grid {
     display: flex; flex-wrap: wrap; justify-content: center; gap: 12px;
@@ -105,6 +137,11 @@ img.stream { border:2px solid #0f0; margin-top:10px; }
 </style></head>
 <body>
 <h2>Robot Head - Debug</h2>
+<div class="eye-preview">
+    <canvas id="eye-left" width="200" height="200"></canvas>
+    <canvas id="eye-right" width="200" height="200"></canvas>
+</div>
+<img id="eyes-src" src="/stream/eyes" style="display:none" />
 <img class="stream" src="/stream" /><br>
 <p>Camera feed with face detection overlay</p>
 
@@ -138,6 +175,36 @@ img.stream { border:2px solid #0f0; margin-top:10px; }
 </div>
 
 <script>
+// Eye preview: draw combined MJPEG stream onto two circular canvases
+(function() {
+    var src = document.getElementById('eyes-src');
+    var cL = document.getElementById('eye-left');
+    var cR = document.getElementById('eye-right');
+    var ctxL = cL.getContext('2d');
+    var ctxR = cR.getContext('2d');
+    var sz = 200, eyeW = 240, gap = 20;
+    function drawEyes() {
+        if (src.naturalWidth > 0) {
+            // Left eye: crop (0,0,240,240) -> draw as circle
+            ctxL.save();
+            ctxL.beginPath();
+            ctxL.arc(sz/2, sz/2, sz/2, 0, Math.PI*2);
+            ctxL.clip();
+            ctxL.drawImage(src, 0, 0, eyeW, eyeW, 0, 0, sz, sz);
+            ctxL.restore();
+            // Right eye: crop (260,0,240,240) -> draw as circle
+            ctxR.save();
+            ctxR.beginPath();
+            ctxR.arc(sz/2, sz/2, sz/2, 0, Math.PI*2);
+            ctxR.clip();
+            ctxR.drawImage(src, eyeW+gap, 0, eyeW, eyeW, 0, 0, sz, sz);
+            ctxR.restore();
+        }
+        requestAnimationFrame(drawEyes);
+    }
+    drawEyes();
+})();
+
 function loadStyles() {
     fetch('/api/styles')
         .then(r => r.json())
@@ -330,6 +397,8 @@ class DebugHandler(BaseHTTPRequestHandler):
             self._send_html(_INDEX_HTML)
         elif self.path == "/stream":
             self._send_stream()
+        elif self.path == "/stream/eyes":
+            self._send_eye_stream()
         elif self.path == "/api/styles":
             self._send_json_styles()
         elif self.path == "/api/moods":
@@ -389,6 +458,25 @@ class DebugHandler(BaseHTTPRequestHandler):
                     self.wfile.write(jpeg)
                     self.wfile.write(b"\r\n")
                 time.sleep(0.1)  # ~10 FPS for the debug stream
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def _send_eye_stream(self):
+        self.send_response(200)
+        self.send_header("Content-Type",
+                         "multipart/x-mixed-replace; boundary=frame")
+        self.end_headers()
+        try:
+            while True:
+                jpeg = self.debug_state.get_eyes_jpeg()
+                if jpeg is not None:
+                    self.wfile.write(b"--frame\r\n")
+                    self.wfile.write(b"Content-Type: image/jpeg\r\n")
+                    self.wfile.write(f"Content-Length: {len(jpeg)}\r\n".encode())
+                    self.wfile.write(b"\r\n")
+                    self.wfile.write(jpeg)
+                    self.wfile.write(b"\r\n")
+                time.sleep(0.1)  # ~10 FPS
         except (BrokenPipeError, ConnectionResetError):
             pass
 

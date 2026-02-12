@@ -135,6 +135,10 @@ class RobotHead:
                 # Push to displays
                 display_mgr.update(left_img, right_img)
 
+                # Stash rendered eyes for debug web preview
+                if self._debug_state:
+                    self._debug_state.update_eyes(left_img, right_img)
+
                 # FPS counting
                 frame_count += 1
                 if now - fps_timer >= 1.0:
