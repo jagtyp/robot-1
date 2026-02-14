@@ -8,15 +8,15 @@ from src.eyes.eye_state import EyeState
 from src.config import EyeConfig
 
 
-# Astro blue palette — rich saturated blue like the real thing
-ASTRO_BLUE = (20, 100, 255)
-ASTRO_BRIGHT = (60, 160, 255)
-ASTRO_DIM = (10, 50, 160)
+# Astro blue palette — rich saturated blue, boosted brightness
+ASTRO_BLUE = (40, 130, 255)
+ASTRO_BRIGHT = (90, 190, 255)
+ASTRO_DIM = (20, 70, 200)
 SCREEN_BG = (2, 3, 8)
 
 # LED dot matrix settings
 DOT_SPACING = 6      # pixels between dot centers
-DOT_RADIUS = 2.0     # radius of each LED dot
+DOT_RADIUS = 2.4     # radius of each LED dot
 GLOW_RADIUS = 10     # blur radius for the glow effect
 
 ASTRO_MOODS = {
@@ -170,14 +170,14 @@ class AstroEyeRenderer:
 
     def _draw_neutral(self, d, cx, cy, scale_y):
         """Soft tapered oval — wider at top, narrower at bottom."""
-        w_top, w_bot = 65, 50
-        h = 90 * scale_y
+        w_top, w_bot = 78, 60
+        h = 108 * scale_y
         self._tapered_oval(d, cx, cy, w_top, w_bot, h, ASTRO_BLUE)
 
     def _draw_happy(self, d, cx, cy, scale_y):
         """Upward arc eyes — squinted happy (^_^)."""
-        w_top, w_bot = 70, 55
-        h = 50 * scale_y
+        w_top, w_bot = 84, 66
+        h = 60 * scale_y
         self._tapered_oval(d, cx, cy + 5, w_top, w_bot, h, ASTRO_BLUE)
         # Cut out top portion to create arc effect
         cut_h = h * 0.5
@@ -186,50 +186,50 @@ class AstroEyeRenderer:
 
     def _draw_excited(self, d, cx, cy, scale_y):
         """Large round eyes."""
-        r = 55 * scale_y
+        r = 66 * scale_y
         d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ASTRO_BRIGHT)
 
     def _draw_sad(self, d, cx, cy, scale_y):
         """Drooping eyes — angled down on outer edge."""
-        w_top, w_bot = 60, 50
-        h = 70 * scale_y
+        w_top, w_bot = 72, 60
+        h = 84 * scale_y
         self._tapered_oval(d, cx, cy + 10, w_top, w_bot, h, ASTRO_DIM)
         # Angled eyelid cut at top
-        tilt = -15 if self._is_left else 15
+        tilt = -18 if self._is_left else 18
         pts = [
-            (cx - w_top - 5, cy + 10 - h / 2 + 10 + tilt),
-            (cx + w_top + 5, cy + 10 - h / 2 + 10 - tilt),
-            (cx + w_top + 5, cy + 10 - h / 2 - 15),
-            (cx - w_top - 5, cy + 10 - h / 2 - 15),
+            (cx - w_top - 5, cy + 10 - h / 2 + 12 + tilt),
+            (cx + w_top + 5, cy + 10 - h / 2 + 12 - tilt),
+            (cx + w_top + 5, cy + 10 - h / 2 - 18),
+            (cx - w_top - 5, cy + 10 - h / 2 - 18),
         ]
         d.polygon(pts, fill=SCREEN_BG)
 
     def _draw_angry(self, d, cx, cy, scale_y):
         """Angled inward — V brow cut."""
-        w_top, w_bot = 70, 55
-        h = 60 * scale_y
+        w_top, w_bot = 84, 66
+        h = 72 * scale_y
         self._tapered_oval(d, cx, cy, w_top, w_bot, h, ASTRO_BLUE)
         # V-shaped brow cut
         inward = -1 if self._is_left else 1
         pts = [
-            (cx - w_top - 5, cy - h / 2 + 5 + 25 * inward),
-            (cx + w_top + 5, cy - h / 2 + 5 - 25 * inward),
-            (cx + w_top + 5, cy - h / 2 - 20),
-            (cx - w_top - 5, cy - h / 2 - 20),
+            (cx - w_top - 5, cy - h / 2 + 6 + 30 * inward),
+            (cx + w_top + 5, cy - h / 2 + 6 - 30 * inward),
+            (cx + w_top + 5, cy - h / 2 - 24),
+            (cx - w_top - 5, cy - h / 2 - 24),
         ]
         d.polygon(pts, fill=SCREEN_BG)
 
     def _draw_surprised(self, d, cx, cy, scale_y):
         """Wide open round eyes."""
-        r = 60 * scale_y
+        r = 72 * scale_y
         d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ASTRO_BRIGHT)
         # Dark inner pupil
-        pr = 22 * scale_y
+        pr = 26 * scale_y
         d.ellipse([cx - pr, cy - pr, cx + pr, cy + pr], fill=SCREEN_BG)
 
     def _draw_love(self, d, cx, cy, scale_y):
         """Heart-shaped eyes — blue like the reference."""
-        w, h = 75, 70 * scale_y
+        w, h = 90, 84 * scale_y
         # Draw heart using parametric polygon
         points = []
         n = 50
@@ -245,8 +245,8 @@ class AstroEyeRenderer:
         """Star-shaped eyes — slowly rotating."""
         now = time.monotonic()
         rot = (now * 30) % 360
-        outer = 55 * scale_y
-        inner = 25 * scale_y
+        outer = 66 * scale_y
+        inner = 30 * scale_y
         pts = _star_points(cx, cy, outer, inner, points=5, rotation=rot)
         d.polygon(pts, fill=ASTRO_BRIGHT)
 
@@ -254,7 +254,7 @@ class AstroEyeRenderer:
         """Spiral dazed eyes."""
         now = time.monotonic()
         rot = now * 120
-        r_max = 45 * scale_y
+        r_max = 54 * scale_y
         # Draw spiral as thick arc segments
         steps = 100
         for i in range(1, steps):
@@ -274,62 +274,62 @@ class AstroEyeRenderer:
 
     def _draw_tired(self, d, cx, cy, scale_y):
         """Half-closed flat eyes."""
-        w_top, w_bot = 70, 55
-        h = 30 * scale_y
+        w_top, w_bot = 84, 66
+        h = 36 * scale_y
         self._tapered_oval(d, cx, cy + 18, w_top, w_bot, h, ASTRO_DIM)
 
     def _draw_wink(self, d, cx, cy, scale_y):
         """Left eye normal, right eye winking arc."""
         if self._is_left:
-            w_top, w_bot = 65, 50
-            h = 90 * scale_y
+            w_top, w_bot = 78, 60
+            h = 108 * scale_y
             self._tapered_oval(d, cx, cy, w_top, w_bot, h, ASTRO_BLUE)
         else:
             # Winking arc — thick curved line
-            w = 65
-            h = 40 * scale_y
-            lw = 16
+            w = 78
+            h = 48 * scale_y
+            lw = 19
             bbox = [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2]
             d.arc(bbox, start=10, end=170, fill=ASTRO_BLUE, width=lw)
 
     def _draw_determined(self, d, cx, cy, scale_y):
         """Narrowed focused eyes with slight inward angle."""
-        w_top, w_bot = 80, 65
-        h = 40 * scale_y
+        w_top, w_bot = 96, 78
+        h = 48 * scale_y
         self._tapered_oval(d, cx, cy, w_top, w_bot, h, ASTRO_BLUE)
         inward = -1 if self._is_left else 1
         pts = [
-            (cx - w_top - 5, cy - h / 2 + 3 + 10 * inward),
-            (cx + w_top + 5, cy - h / 2 + 3 - 10 * inward),
-            (cx + w_top + 5, cy - h / 2 - 15),
-            (cx - w_top - 5, cy - h / 2 - 15),
+            (cx - w_top - 5, cy - h / 2 + 4 + 12 * inward),
+            (cx + w_top + 5, cy - h / 2 + 4 - 12 * inward),
+            (cx + w_top + 5, cy - h / 2 - 18),
+            (cx - w_top - 5, cy - h / 2 - 18),
         ]
         d.polygon(pts, fill=SCREEN_BG)
 
     def _draw_worried(self, d, cx, cy, scale_y):
         """Uneven eyes — one higher, with upward inner brow."""
-        w_top, w_bot = 55, 45
-        h = 75 * scale_y
-        y_shift = -10 if self._is_left else 10
+        w_top, w_bot = 66, 54
+        h = 90 * scale_y
+        y_shift = -12 if self._is_left else 12
         self._tapered_oval(d, cx, cy + y_shift, w_top, w_bot, h, ASTRO_BLUE)
         inward = 1 if self._is_left else -1
         pts = [
-            (cx - w_top - 5, cy + y_shift - h / 2 + 5 - 12 * inward),
-            (cx + w_top + 5, cy + y_shift - h / 2 + 5 + 12 * inward),
-            (cx + w_top + 5, cy + y_shift - h / 2 - 15),
-            (cx - w_top - 5, cy + y_shift - h / 2 - 15),
+            (cx - w_top - 5, cy + y_shift - h / 2 + 6 - 14 * inward),
+            (cx + w_top + 5, cy + y_shift - h / 2 + 6 + 14 * inward),
+            (cx + w_top + 5, cy + y_shift - h / 2 - 18),
+            (cx - w_top - 5, cy + y_shift - h / 2 - 18),
         ]
         d.polygon(pts, fill=SCREEN_BG)
 
     def _draw_celebrating(self, d, cx, cy, scale_y):
         """Round eyes with animated sparkle ring."""
-        r = 50 * scale_y
+        r = 60 * scale_y
         d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ASTRO_BLUE)
         # Sparkle ring
         now = time.monotonic()
         for i in range(6):
             angle = math.radians(now * 80 + i * 60)
-            dist = 65
+            dist = 78
             sx = cx + dist * math.cos(angle)
             sy = cy + dist * math.sin(angle) * scale_y
             sr = 5 + 3 * math.sin(now * 5 + i * 2)
@@ -345,25 +345,25 @@ class AstroEyeRenderer:
         ex = cx + tremble_x
         ey = cy + tremble_y
         # Small round eye
-        r = 40 * scale_y
+        r = 48 * scale_y
         d.ellipse([ex - r, ey - r, ex + r, ey + r], fill=ASTRO_BRIGHT)
         # Tiny pupil (fear = constricted)
-        pr = 12 * scale_y
+        pr = 14 * scale_y
         d.ellipse([ex - pr, ey - pr, ex + pr, ey + pr], fill=SCREEN_BG)
 
     def _draw_crying(self, d, cx, cy, scale_y):
         """Sad droopy eyes with animated tear streams."""
         # Sad eye shape
-        w_top, w_bot = 55, 45
-        h = 60 * scale_y
+        w_top, w_bot = 66, 54
+        h = 72 * scale_y
         self._tapered_oval(d, cx, cy + 5, w_top, w_bot, h, ASTRO_DIM)
         # Angled sad brow
-        tilt = -12 if self._is_left else 12
+        tilt = -14 if self._is_left else 14
         pts = [
-            (cx - w_top - 5, cy + 5 - h / 2 + 8 + tilt),
-            (cx + w_top + 5, cy + 5 - h / 2 + 8 - tilt),
-            (cx + w_top + 5, cy + 5 - h / 2 - 15),
-            (cx - w_top - 5, cy + 5 - h / 2 - 15),
+            (cx - w_top - 5, cy + 5 - h / 2 + 10 + tilt),
+            (cx + w_top + 5, cy + 5 - h / 2 + 10 - tilt),
+            (cx + w_top + 5, cy + 5 - h / 2 - 18),
+            (cx - w_top - 5, cy + 5 - h / 2 - 18),
         ]
         d.polygon(pts, fill=SCREEN_BG)
         # Animated tear drops falling from bottom of eye
@@ -381,17 +381,17 @@ class AstroEyeRenderer:
 
     def _draw_laughing(self, d, cx, cy, scale_y):
         """Tightly squinted XD eyes — upside-down U arcs."""
-        w = 60
-        h = 50 * scale_y
-        lw = 18
+        w = 72
+        h = 60 * scale_y
+        lw = 22
         # Upside-down U shape (bottom arc)
         bbox = [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2]
         d.arc(bbox, start=190, end=350, fill=ASTRO_BRIGHT, width=lw)
 
     def _draw_x_eyes(self, d, cx, cy, scale_y):
         """X-shaped stunned/KO eyes."""
-        size = 45 * scale_y
-        lw = 14
+        size = 54 * scale_y
+        lw = 17
         d.line([(cx - size, cy - size), (cx + size, cy + size)],
                fill=ASTRO_DIM, width=lw)
         d.line([(cx + size, cy - size), (cx - size, cy + size)],
@@ -401,29 +401,29 @@ class AstroEyeRenderer:
         """Asymmetric eyes — one big, one small, with tilted brow."""
         if self._is_left:
             # Bigger eye, raised
-            r = 50 * scale_y
+            r = 60 * scale_y
             d.ellipse([cx - r, cy - 8 - r, cx + r, cy - 8 + r],
                       fill=ASTRO_BLUE)
         else:
             # Smaller squinting eye
-            w_top, w_bot = 50, 40
-            h = 35 * scale_y
+            w_top, w_bot = 60, 48
+            h = 42 * scale_y
             self._tapered_oval(d, cx, cy + 8, w_top, w_bot, h, ASTRO_BLUE)
             # Tilted brow
             pts = [
                 (cx - w_top - 5, cy + 8 - h / 2 - 2),
-                (cx + w_top + 5, cy + 8 - h / 2 + 12),
-                (cx + w_top + 5, cy + 8 - h / 2 - 15),
-                (cx - w_top - 5, cy + 8 - h / 2 - 15),
+                (cx + w_top + 5, cy + 8 - h / 2 + 14),
+                (cx + w_top + 5, cy + 8 - h / 2 - 18),
+                (cx - w_top - 5, cy + 8 - h / 2 - 18),
             ]
             d.polygon(pts, fill=SCREEN_BG)
 
     def _draw_sleepy(self, d, cx, cy, scale_y):
         """Barely-open slit eyes with floating Z letters."""
         # Thin slit eye
-        w = 55
-        h = 12 * scale_y
-        lw = 14
+        w = 66
+        h = 14 * scale_y
+        lw = 17
         bbox = [cx - w / 2, cy + 10 - h, cx + w / 2, cy + 10 + h]
         d.arc(bbox, start=200, end=340, fill=ASTRO_DIM, width=lw)
         # Animated Z letters floating up
@@ -455,22 +455,22 @@ class AstroEyeRenderer:
         """Sly asymmetric look — one eye normal, one narrowed smugly."""
         if self._is_left:
             # Normal-ish eye but slightly narrowed at top
-            w_top, w_bot = 60, 50
-            h = 70 * scale_y
+            w_top, w_bot = 72, 60
+            h = 84 * scale_y
             self._tapered_oval(d, cx, cy, w_top, w_bot, h, ASTRO_BLUE)
             # Slight smug brow angle
             pts = [
-                (cx - w_top - 5, cy - h / 2 + 8),
+                (cx - w_top - 5, cy - h / 2 + 10),
                 (cx + w_top + 5, cy - h / 2 + 2),
-                (cx + w_top + 5, cy - h / 2 - 15),
-                (cx - w_top - 5, cy - h / 2 - 15),
+                (cx + w_top + 5, cy - h / 2 - 18),
+                (cx - w_top - 5, cy - h / 2 - 18),
             ]
             d.polygon(pts, fill=SCREEN_BG)
         else:
             # Narrowed sly eye
-            w = 65
-            h = 35 * scale_y
-            lw = 16
+            w = 78
+            h = 42 * scale_y
+            lw = 19
             bbox = [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2]
             d.arc(bbox, start=195, end=345, fill=ASTRO_BLUE, width=lw)
 
