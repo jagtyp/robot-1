@@ -29,13 +29,15 @@ BONDED = "BONDED"
 BORED = "BORED"
 
 # Personality event pool (brief mood flashes during IDLE)
-_IDLE_PERSONALITY = ["surprised", "mischievous", "wink", "star", "tired"]
+_IDLE_PERSONALITY = ["surprised", "mischievous", "wink", "star", "tired",
+                     "laughing", "determined", "dizzy", "x_eyes"]
 
 # Bored mood rotation
-_BORED_MOODS = ["tired", "confused", "sleepy", "sad"]
+_BORED_MOODS = ["tired", "confused", "sleepy", "sad", "dizzy", "worried"]
 
 # Bonded affection moods
-_BONDED_AFFECTION = ["happy", "love", "wink", "celebrating"]
+_BONDED_AFFECTION = ["happy", "love", "wink", "celebrating", "laughing",
+                     "excited", "star"]
 
 
 class MoodEngine:
@@ -232,7 +234,7 @@ class MoodEngine:
 
         # Motion surprise (only if not in a personality flash)
         if motion > self._cfg.motion_surprise_threshold and not self._personality_revert_at:
-            self._set_mood("surprised")
+            self._set_mood(random.choice(["surprised", "surprised", "scared"]))
             self._personality_revert_at = now + 2.0
             self._next_personality = now + random.uniform(8, 15)
             return
@@ -271,7 +273,7 @@ class MoodEngine:
         # Face lost -> back to IDLE with brief sadness
         if not face_present and face_lost_ago >= self._cfg.face_lost_to_idle_secs:
             self._transition(IDLE, now)
-            self._set_mood("sad")
+            self._set_mood(random.choice(["sad", "sad", "crying", "worried"]))
             self._sad_revert_at = now + 3.0
             self._next_personality = now + random.uniform(8, 15)
 
@@ -280,7 +282,7 @@ class MoodEngine:
         # Face lost -> IDLE with sadness
         if face_lost:
             self._transition(IDLE, now)
-            self._set_mood("sad")
+            self._set_mood(random.choice(["sad", "crying", "worried"]))
             self._sad_revert_at = now + 3.0
             self._next_personality = now + random.uniform(8, 15)
             return
@@ -297,10 +299,10 @@ class MoodEngine:
 
     # --- BORED ---
     def _tick_bored(self, now, face_appeared):
-        # Face appeared -> ENGAGED with excitement
+        # Face appeared -> ENGAGED (excited, or occasionally grumpy from being bored)
         if face_appeared:
             self._transition(ENGAGED, now)
-            self._set_mood("excited")
+            self._set_mood(random.choice(["excited", "excited", "excited", "angry"]))
             self._greeting_revert_at = now + 3.0
             return
 

@@ -73,8 +73,8 @@ class AstroEyeRenderer:
     SIZE = 240
     CENTER = 120
 
-    GAZE_RANGE_X = 35
-    GAZE_RANGE_Y = 25
+    GAZE_RANGE_X = 70
+    GAZE_RANGE_Y = 55
 
     def __init__(self, config: EyeConfig, is_left: bool = True):
         self._config = config
@@ -169,20 +169,23 @@ class AstroEyeRenderer:
     # --- Mood renderers (draw solid shapes on shape layer) ---
 
     def _draw_neutral(self, d, cx, cy, scale_y):
-        """Round eyes — like excited but smaller."""
-        r = 50 * scale_y
-        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ASTRO_BLUE)
+        """Tall vertical pill — Astro Bot's signature resting eyes."""
+        hw = 38       # half-width
+        hh = 54 * scale_y  # half-height (taller than wide)
+        d.rounded_rectangle(
+            [cx - hw, cy - hh, cx + hw, cy + hh],
+            radius=hw,  # fully rounded ends
+            fill=ASTRO_BLUE,
+        )
 
     def _draw_happy(self, d, cx, cy, scale_y):
-        """Wide horizontal pill — classic Astro Bot squint smile."""
-        hw = 80      # half-width
-        hh = 42 * scale_y  # half-height
-        y = cy + 10  # slightly below center
-        d.rounded_rectangle(
-            [cx - hw, y - hh, cx + hw, y + hh],
-            radius=hh,  # fully rounded ends
-            fill=ASTRO_BRIGHT,
-        )
+        """Upward-curving arcs — squinted ^_^ happy eyes."""
+        w = 96
+        h = 74 * scale_y
+        lw = 28
+        y = cy + 8  # slightly below center
+        bbox = [cx - w / 2, y - h / 2, cx + w / 2, y + h / 2]
+        d.arc(bbox, start=200, end=340, fill=ASTRO_BRIGHT, width=lw)
 
     def _draw_excited(self, d, cx, cy, scale_y):
         """Large round eyes."""
@@ -279,11 +282,14 @@ class AstroEyeRenderer:
         self._tapered_oval(d, cx, cy + 18, w_top, w_bot, h, ASTRO_DIM)
 
     def _draw_wink(self, d, cx, cy, scale_y):
-        """Left eye normal, right eye winking arc."""
+        """Left eye normal tall pill, right eye winking arc."""
         if self._is_left:
-            w_top, w_bot = 78, 60
-            h = 108 * scale_y
-            self._tapered_oval(d, cx, cy, w_top, w_bot, h, ASTRO_BLUE)
+            hw = 38
+            hh = 54 * scale_y
+            d.rounded_rectangle(
+                [cx - hw, cy - hh, cx + hw, cy + hh],
+                radius=hw, fill=ASTRO_BLUE,
+            )
         else:
             # Winking arc — thick curved line
             w = 78
@@ -398,12 +404,15 @@ class AstroEyeRenderer:
                fill=ASTRO_DIM, width=lw)
 
     def _draw_confused(self, d, cx, cy, scale_y):
-        """Asymmetric eyes — one big, one small, with tilted brow."""
+        """Asymmetric eyes — one big tall pill, one small squinting."""
         if self._is_left:
-            # Bigger eye, raised
-            r = 60 * scale_y
-            d.ellipse([cx - r, cy - 8 - r, cx + r, cy - 8 + r],
-                      fill=ASTRO_BLUE)
+            # Bigger eye, raised — tall pill
+            hw = 40
+            hh = 58 * scale_y
+            d.rounded_rectangle(
+                [cx - hw, cy - 8 - hh, cx + hw, cy - 8 + hh],
+                radius=hw, fill=ASTRO_BLUE,
+            )
         else:
             # Smaller squinting eye
             w_top, w_bot = 60, 48
@@ -452,18 +461,21 @@ class AstroEyeRenderer:
                        fill=z_color, width=3)
 
     def _draw_mischievous(self, d, cx, cy, scale_y):
-        """Sly asymmetric look — one eye normal, one narrowed smugly."""
+        """Sly asymmetric look — one eye tall pill with brow, one narrowed smugly."""
         if self._is_left:
-            # Normal-ish eye but slightly narrowed at top
-            w_top, w_bot = 72, 60
-            h = 84 * scale_y
-            self._tapered_oval(d, cx, cy, w_top, w_bot, h, ASTRO_BLUE)
-            # Slight smug brow angle
+            # Tall pill with slight smug brow angle
+            hw = 38
+            hh = 54 * scale_y
+            d.rounded_rectangle(
+                [cx - hw, cy - hh, cx + hw, cy + hh],
+                radius=hw, fill=ASTRO_BLUE,
+            )
+            # Slight smug brow angle cutting into top
             pts = [
-                (cx - w_top - 5, cy - h / 2 + 10),
-                (cx + w_top + 5, cy - h / 2 + 2),
-                (cx + w_top + 5, cy - h / 2 - 18),
-                (cx - w_top - 5, cy - h / 2 - 18),
+                (cx - hw - 5, cy - hh + 10),
+                (cx + hw + 5, cy - hh + 2),
+                (cx + hw + 5, cy - hh - 18),
+                (cx - hw - 5, cy - hh - 18),
             ]
             d.polygon(pts, fill=SCREEN_BG)
         else:
