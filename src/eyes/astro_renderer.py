@@ -169,20 +169,20 @@ class AstroEyeRenderer:
     # --- Mood renderers (draw solid shapes on shape layer) ---
 
     def _draw_neutral(self, d, cx, cy, scale_y):
-        """Soft tapered oval — wider at top, narrower at bottom."""
-        w_top, w_bot = 78, 60
-        h = 108 * scale_y
-        self._tapered_oval(d, cx, cy, w_top, w_bot, h, ASTRO_BLUE)
+        """Round eyes — like excited but smaller."""
+        r = 50 * scale_y
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ASTRO_BLUE)
 
     def _draw_happy(self, d, cx, cy, scale_y):
-        """Upward arc eyes — squinted happy (^_^)."""
-        w_top, w_bot = 84, 66
-        h = 60 * scale_y
-        self._tapered_oval(d, cx, cy + 5, w_top, w_bot, h, ASTRO_BLUE)
-        # Cut out top portion to create arc effect
-        cut_h = h * 0.5
-        d.rectangle([cx - w_top, cy + 5 - h / 2,
-                     cx + w_top, cy + 5 - h / 2 + cut_h], fill=SCREEN_BG)
+        """Wide horizontal pill — classic Astro Bot squint smile."""
+        hw = 80      # half-width
+        hh = 42 * scale_y  # half-height
+        y = cy + 10  # slightly below center
+        d.rounded_rectangle(
+            [cx - hw, y - hh, cx + hw, y + hh],
+            radius=hh,  # fully rounded ends
+            fill=ASTRO_BRIGHT,
+        )
 
     def _draw_excited(self, d, cx, cy, scale_y):
         """Large round eyes."""
